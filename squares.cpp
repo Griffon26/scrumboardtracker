@@ -69,16 +69,16 @@ static void findSquares( const Mat& image, vector<vector<Point> >& squares )
           while((c = waitKey()) > 255);
         }
 
-        inRange(sat, 0, 25, gray0);
+        inRange(sat, 25, 255, gray0);
 
         {
           imshow(wndname, gray0);
           int c;
           while((c = waitKey()) > 255);
         }
-
+#if 0
         // try several threshold levels
-        for( int l = 0; l < N; l++ )
+        for( int l = 1; l < N; l++ )
         {
             cout << "  Threshold level " << l << endl;
 
@@ -100,19 +100,54 @@ static void findSquares( const Mat& image, vector<vector<Point> >& squares )
                 //     tgray(x,y) = gray(x,y) < (l+1)*255/N ? 255 : 0
                 gray = gray0 >= (l+1)*255/N;
             }
+#endif
+
+#if 0
+        dilate(gray0, gray, Mat(), Point(-1,-1));
+        {
+          imshow(wndname, gray);
+          int c;
+          while((c = waitKey()) > 255);
+        }
+#else
+        gray = gray0;
+#endif
+
+
+            Mat dist;
+            distanceTransform(gray, dist, CV_DIST_L2, 3);
+            normalize(dist, dist, 0, 1., NORM_MINMAX);
+
+        {
+          imshow(wndname, dist);
+          int c;
+          while((c = waitKey()) > 255);
+        }
+
+          threshold(dist, dist, .5, 1., CV_THRESH_BINARY);
+        {
+          imshow(wndname, dist);
+          int c;
+          while((c = waitKey()) > 255);
+        }
 
             vector<vector<Point> > contours;
-            vector<Vec4i> hierarchy;
-
             // find contours and store them all as a list
-            findContours(gray, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+            findContours(gray, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
 
             if(contours.size() != 0)
             {
               Mat contourImage(image.size(), CV_8UC3, Scalar(0,0,0));
               contourImage = Scalar(0,0,0);
               cout << "Drawing " << contours.size() << " contours" << endl;
-              drawContours(contourImage, contours, -1, Scalar(255,0,255), 1, 8, hierarchy, 2);
+
+              // iterate through all the top-level contours,
+              // draw each connected component with its own random color
+              for(int idx = 0; idx < contours.size(); idx++)
+              {
+                  Scalar color( rand()&255, rand()&255, rand()&255 );
+                  drawContours( contourImage, contours, idx, color);
+              }
               imshow(wndname, contourImage);
 
               int c;
@@ -124,6 +159,7 @@ static void findSquares( const Mat& image, vector<vector<Point> >& squares )
             // test each contour
             for( size_t i = 0; i < contours.size(); i++ )
             {
+#if 0
                 {
                   /* FIXME: This is an experiment to see if the contourtree can still be used.
                    * If so it should be easier to match rectangles.
@@ -141,6 +177,7 @@ static void findSquares( const Mat& image, vector<vector<Point> >& squares )
                   CvMemStorage* treeStorage = cvCreateMemStorage(1000);
                   cvCreateContourTree(myKeypointSeq, treeStorage, 0);
                 }
+#endif
 
                 // approximate contour with accuracy proportional
                 // to the contour perimeter
@@ -175,7 +212,9 @@ static void findSquares( const Mat& image, vector<vector<Point> >& squares )
                         squares.push_back(approx);
                 }
             }
+#if 0
         }
+#endif
 }
 
 
@@ -224,7 +263,6 @@ int main(int /*argc*/, char** /*argv*/)
 
         int c;
         while((c = waitKey()) > 255);
-        cout << "Key was" << c << endl;
         if( (char)c == 27 )
             break;
     }
