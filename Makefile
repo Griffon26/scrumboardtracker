@@ -1,8 +1,7 @@
 
 CXXFLAGS=`pkg-config --cflags --libs opencv`
 
-all: squares webcam
+all: squares
 
 squares: squares.cpp
-webcam: webcam.cpp
 

@@ -1,5 +1,20 @@
 #!/usr/bin/env python
 
+# Copyright 2014 Maurice van der Pot
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from gi.repository import Gtk
 import json
 import math
@@ -174,27 +189,6 @@ if __name__ == "__main__":
         corners.reverse()
 
     calibrationdata['corners'] = corners
-
-
-#    if xdiff_right == 0:
-#        direction = -1
-#    else:
-#        slope_to_right = ydiff_right / xdiff_right
-#
-#        if xdiff_left == 0:
-#            direction = 1
-#        else:
-#            slope_to_left = ydiff_left / xdiff_left
-#
-#            if slope_to_left < slope_to_right:
-#                direction = -1
-#            else:
-#                direction = 1
-#    if direction == -1:
-#        topindex = (topindex + 4 - 1) % 4
-#
-#    calibrationdata['corners'] = (calibrationdata['corners'] * 2)[topindex:topindex + 4]
-
 
     orderedcorners = np.array(calibrationdata['corners'], np.float32)
 
