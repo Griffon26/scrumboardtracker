@@ -26,6 +26,8 @@ wndname = "Calibration";
 calibrationdata = {}
 draggablePoints = []
 draggedPoint = None
+linepositions = []
+draggedLine = None
 
 def eucldistance(p1, p2):
     return cv2.norm(np.array(p1) - np.array(p2))
@@ -41,14 +43,13 @@ def drawImageWithCorners(originalImage):
 
     cv2.imshow(wndname, image)
 
-def mouseHandler(event, x, y, flags, param):
+def mouseHandler1(event, x, y, flags, param):
     global draggablePoints, draggedPoint
 
     originalImage = param
 
     # user press left button
     if event == cv2.EVENT_LBUTTONDOWN and draggedPoint == None:
-        selectedPoint = None
         for i, p in enumerate(draggablePoints):
             if eucldistance(p, (x,y)) < 10:
                 draggedPoint = i
@@ -68,6 +69,41 @@ def mouseHandler(event, x, y, flags, param):
         # user release left button
         if event == cv2.EVENT_LBUTTONUP:
             draggedPoint = None
+
+def drawImageWithLines(originalImage):
+    image = originalImage.copy();
+
+    for linepos in linepositions:
+        cv2.line(image, (linepos, 0), (linepos, image.shape[1] - 1), (255,0,0))
+
+    cv2.imshow(wndname, image)
+
+def mouseHandler2(event, x, y, flags, param):
+    global linepositions, draggedLine
+
+    originalImage = param
+
+    # user press left button
+    if event == cv2.EVENT_LBUTTONDOWN and draggedLine == None:
+        for i, linepos in enumerate(linepositions):
+            if abs(x - linepos) < 10:
+                draggedLine = i
+
+    # user drag the mouse
+    if ( (event == cv2.EVENT_MOUSEMOVE or event == cv2.EVENT_LBUTTONUP) and draggedLine != None):
+
+        if x < 0:
+            x = 0
+        if x >= originalImage.shape[0]:
+            x = originalImage.shape[0] - 1
+
+        linepositions[draggedLine] = x
+
+        drawImageWithLines(originalImage)
+
+        # user release left button
+        if event == cv2.EVENT_LBUTTONUP:
+            draggedLine = None
 
 def loadCalibrationData():
     global calibrationdata
@@ -92,6 +128,9 @@ def loadCalibrationData():
     if 'aspectratio' not in calibrationdata:
         calibrationdata['aspectratio'] = [1.0, 1.0]
 
+    if 'linepositions' not in calibrationdata:
+        calibrationdata['linepositions'] = None
+
 def saveCalibrationData():
     with open('calibrationdata.json', 'wb') as f:
         f.write(json.dumps(calibrationdata))
@@ -102,13 +141,17 @@ if __name__ == "__main__":
 
     loadCalibrationData()
 
+    #
+    # Let the user drag the corners and background location in the image
+    #
+
     draggablePoints = calibrationdata['corners'] + [calibrationdata['background']]
 
     image = cv2.imread("webcam.jpg", 1);
 
     drawImageWithCorners(image);
 
-    cv2.setMouseCallback(wndname, mouseHandler, image)
+    cv2.setMouseCallback(wndname, mouseHandler1, image)
 
     while 1:
         k = cv2.waitKey(1) & 0xFF;
@@ -119,35 +162,12 @@ if __name__ == "__main__":
     calibrationdata['corners'] = draggablePoints[0:4]
     calibrationdata['background'] = draggablePoints[4]
 
+
+    #
+    # Sort the corners such that the top left corner is the first in the list and the corners are in clockwise order
+    #
+
     vertically_sorted_corners_with_index = sorted(enumerate(calibrationdata['corners']), key=lambda t: t[1][1])
-
-
-
-    """
-    print vertically_sorted_corners_with_index
-
-    index1, p1 = vertically_sorted_corners_with_index[0]
-    index2, p2 = vertically_sorted_corners_with_index[1]
-
-    if (abs(index1 - index2) % 4) != 1:
-        raise RuntimeError('The selected shape is not convex and thus invalid: %s' % vertically_sorted_corners_with_index)
-
-    startindex = min(index1, index2)
-
-    if p1[0] < p2[0]:
-        startindex = index1
-        nextindex = index2
-    else:
-        startindex = index2
-        nextindex = index1
-
-    if nextindex < startindex:
-        startindex = 3 - startindex
-        calibrationdata['corners'].reverse()
-
-    calibrationdata['corners'] = (calibrationdata['corners'] * 2)[startindex:startindex + 4]
-    """
-
     topindex, toppoint = vertically_sorted_corners_with_index[0]
 
     rightindex = (topindex + 1) % 4
@@ -190,7 +210,10 @@ if __name__ == "__main__":
 
     calibrationdata['corners'] = corners
 
-    orderedcorners = np.array(calibrationdata['corners'], np.float32)
+
+    #
+    # Ask the user for the aspect ratio of the scrumboard (needed for perspective correction)
+    #
 
 
     win = Gtk.Window()
@@ -219,7 +242,6 @@ if __name__ == "__main__":
     win.show_all()
     Gtk.main()
 
-    saveCalibrationData()
 
     width = 1000
     height = int(width * calibrationdata['aspectratio'][1] / calibrationdata['aspectratio'][0])
@@ -229,13 +251,26 @@ if __name__ == "__main__":
 
     correctedrectangle = np.array([(0,0), (width, 0), (width, height), (0, height)], np.float32)
 
-    print correctedrectangle
-    print orderedcorners
-
+    orderedcorners = np.array(calibrationdata['corners'], np.float32)
     transformation = cv2.getPerspectiveTransform(orderedcorners, correctedrectangle)
     correctedimage = cv2.warpPerspective(image, transformation, (width, height))
 
-    cv2.imshow(wndname, correctedimage)
+
+
+    #
+    # Let the user drag the lines separating todo, busy, blocked, in review and done columns
+    #
+
+    nr_of_lines = 4
+
+    linepositions = calibrationdata['linepositions']
+
+    if not linepositions:
+        linepositions = sorted([(correctedimage.shape[0] / (nr_of_lines + 1) * (i + 1)) for i in xrange(nr_of_lines)])
+
+    drawImageWithLines(correctedimage);
+
+    cv2.setMouseCallback(wndname, mouseHandler2, correctedimage)
 
     while 1:
         k = cv2.waitKey(1) & 0xFF;
@@ -243,5 +278,7 @@ if __name__ == "__main__":
             break
 
 
+    calibrationdata['linepositions'] = linepositions
 
+    saveCalibrationData()
 
