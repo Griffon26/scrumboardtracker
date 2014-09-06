@@ -21,6 +21,7 @@ import cv2
 
 wndname = "Scrumboard"
 
+calibrationdata = None
 
 def waitforescape():
     while 1:
@@ -28,17 +29,16 @@ def waitforescape():
         if k == 27:
             break
 
-if __name__ == "__main__":
-    cv2.namedWindow( wndname, 1 );
-    cv2.moveWindow(wndname, 100, 100);
 
-    with open('calibrationdata.json', 'rb') as f:
-        calibrationdata = json.loads('\n'.join(f.readlines()))
-
+def loadimage():
     image = cv2.imread("webcam.jpg", 1);
     cv2.imshow(wndname, image)
-    waitforescape()
+    #waitforescape()
 
+    return image
+
+
+def remove_color_cast(image):
     bgr_planes = cv2.split(image)
 
     backgroundpos = calibrationdata['background']
@@ -88,9 +88,41 @@ if __name__ == "__main__":
     cv2.imshow(wndname, correctedimage)
     waitforescape()
 
-    hsv = cv2.cvtColor( correctedimage, cv2.COLOR_BGR2HSV )
+    return correctedimage
 
+def loadcalibrationdata():
+    global calibrationdata
+
+    with open('calibrationdata.json', 'rb') as f:
+        calibrationdata = json.loads('\n'.join(f.readlines()))
+
+
+if __name__ == "__main__":
+    cv2.namedWindow( wndname, 1 );
+    cv2.moveWindow(wndname, 100, 100);
+
+    loadcalibrationdata()
+    image = loadimage()
+    correctedimage = remove_color_cast(image)
+
+    # The rest of this program should:
+    # - read the known state of the board from file:
+    #   (consists of bitmaps for all known notes and last known state for each)
+    # - identify any squares on the board
+    # - take their bitmaps and compare them to all known bitmaps
+    #   - for all matches found, determine which column they are in based on position and update their state
+    #   - any remaining bitmaps are new ones, store the bitmap and the state
+    # - go through the remaining unmatched bitmaps and find them on the board
+    #   - for all matches found, determine which column they are in based on position and update their state
+    #   - any remaining bitmaps are notes that are no longer visible:
+    #     - if the note was Done/Todo before, assume it's still Done/Todo
+    #     - otherwise, give a warning & highlight
+    # - for any significant area of saturation that is not covered by
+    #   recognized squares, give a warning & highlight that it looks like a bunch of notes
+
+    hsv = cv2.cvtColor( correctedimage, cv2.COLOR_BGR2HSV )
     _, saturation, _ = cv2.split(hsv)
     print "Showing saturation of corrected image"
     cv2.imshow(wndname, saturation)
     waitforescape()
+
