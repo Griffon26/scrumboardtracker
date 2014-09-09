@@ -178,6 +178,10 @@ def correct_perspective(image):
     return correctedimage
 
 def findsquares(image):
+    print 'showing image to search for squares'
+    cv2.imshow(wndname, image)
+    waitforescape()
+
     denoised = cv2.pyrUp(cv2.pyrDown(image))
 
     hsv = cv2.cvtColor( denoised, cv2.COLOR_BGR2HSV )
@@ -264,8 +268,35 @@ def findsquares(image):
                 singlecontour = cv2.getRectSubPix(singlecomponent, size, center)
                 imagecutout = cv2.getRectSubPix(image, size, center)
 
-                square_bitmap = find_largest_overlapping_square(singlecontour, imagecutout)
+                print 'showing imagecutout'
+                cv2.imshow(wndname, singlecontour)
+                #waitforescape()
+
+                angle, topleft, size, square_bitmap = find_largest_overlapping_square(singlecontour, imagecutout)
                 squares.append(Square(square_bitmap))
+
+                x = topleft[0]
+                y = topleft[1]
+                frame = np.zeros(singlecontour.shape, np.uint8)
+                cv2.rectangle(frame, (x,y), (x + size, y + size), 255, 1)
+                cv2.imshow(wndname, frame)
+                #waitforescape()
+
+                rotation = cv2.getRotationMatrix2D( (frame.shape[0] / 2, frame.shape[1] / 2), angle, 1.0)
+                rotatedframe = cv2.warpAffine(frame, rotation, frame.shape)
+                cv2.imshow(wndname, rotatedframe)
+                #waitforescape()
+
+                print 'showing imagecutout'
+                cv2.imshow(wndname, imagecutout)
+                #waitforescape()
+
+                rotatedframe = cv2.cvtColor( rotatedframe, cv2.COLOR_GRAY2BGR )
+                cutout_with_frame = cv2.addWeighted(imagecutout, 1.0, rotatedframe, 0.5, 0)
+                print 'showing imagecutout with frame'
+                cv2.imshow(wndname, cutout_with_frame)
+                waitforescape()
+
 
     return []
 
@@ -285,7 +316,7 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
         offsetcontour = rotatedcontour.astype(np.float32) - 160
 
-        for kernel_size in xrange(50,70):
+        for kernel_size in xrange(50,imagecutout.shape[0]):
             boxfiltered = cv2.boxFilter(offsetcontour, -1, (kernel_size, kernel_size), None, (0,0), False)
 
             norm = cv2.normalize(boxfiltered, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
@@ -298,6 +329,7 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
             minVal, maxVal, _, maxLoc = cv2.minMaxLoc(boxfiltered, mask)
 
+            #print 'max is %s at angle %s and size %s' % (maxVal, angle, kernel_size)
             if maxVal > overallMax:
                 overallMax = maxVal
                 overallMaxLoc = maxLoc
@@ -305,14 +337,16 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
                 overallMaxKernelSize = kernel_size
 
     bitmap = None
-    #if overallMax > 0:
-    #    rotation = cv2.getRotationMatrix2D(newcenter, overallMaxAngle, 1.0)
+    if overallMax > 0:
+        rotation = cv2.getRotationMatrix2D(newcenter, overallMaxAngle, 1.0)
+        rotatedimagecutout = cv2.warpAffine(imagecutout, rotation, imagecutout.shape[0:2])
+        bitmap = rotatedimagecutout[overallMaxLoc[0]:overallMaxLoc[0] + overallMaxKernelSize, overallMaxLoc[1]:overallMaxLoc[1] + overallMaxKernelSize]
 
-    #    rotatedimagecutout = cv2.warpAffine(imagecutout, rotation, imagecutout.shape)
+        print 'showing largest overlapping square'
+        cv2.imshow(wndname, bitmap)
+        #waitforescape()
 
-    #    bitmap = rotatedimagecutout[overallMaxLoc.x:overallMaxLoc.x + overallMaxKernelSize, overallMaxLoc.y:overallMaxLoc.y + overallMaxKernelSize]
-
-    return bitmap
+    return -overallMaxAngle, overallMaxLoc, overallMaxKernelSize, bitmap
 
 
 if __name__ == "__main__":
