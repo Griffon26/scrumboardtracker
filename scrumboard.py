@@ -38,6 +38,7 @@
 #
 
 import json
+from calibrate import linepositions
 import numpy as np
 import cv2
 
@@ -138,7 +139,7 @@ class Scrumboard():
 
         return self.states[-1]
 
-    def add_tasknote(square):
+    def add_tasknote(self,square):
         state = self.get_state_from_position(square.position)
         tasknote = TaskNote(square.bitmap, state)
         self.tasknotes.add(tasknote)
@@ -156,7 +157,7 @@ class TaskNote():
         self.bitmap = bitmap
         self.state = state
 
-    def setstate(newstate):
+    def setstate(self,newstate):
         self.state = newstate
 
 def flatten(list_with_sublists):

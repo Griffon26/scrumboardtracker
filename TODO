@@ -1,2 +1,5 @@
 - get image from webcam
 - take photos with a webcam (higher resolution than taking a frame from the video stream). Avoid lossy encoding if at all possible.
+- write build script
+	+include dependencies for numpy, opencv, python 2.7.
+
