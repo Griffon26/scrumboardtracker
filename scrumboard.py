@@ -132,20 +132,21 @@ class Scrumboard():
         pass
 
     def get_state_from_position(self, position):
-        for i, linepos in enumerate(linepositions[0]):
+        for i, linepos in enumerate(self.linepositions):
             if position[0] < linepos:
                 return self.states[i]
 
         return self.states[-1]
 
-    def add_tasknote(square):
+    def add_tasknote(self, square):
         state = self.get_state_from_position(square.position)
         tasknote = TaskNote(square.bitmap, state)
         self.tasknotes.add(tasknote)
 
 class Square():
-    def __init__(self, bitmap):
+    def __init__(self, bitmap, position):
         self.bitmap = bitmap
+        self.position = position
 
     def lookslike(otherthingwithbitmap):
         # self.bitmap ~ otherthingwithbitmap.bitmap
@@ -158,6 +159,9 @@ class TaskNote():
 
     def setstate(newstate):
         self.state = newstate
+
+    def find(self, image):
+        return None
 
 def flatten(list_with_sublists):
     return [item for sublist in list_with_sublists for item in sublist]
@@ -273,7 +277,7 @@ def findsquares(image):
                 #waitforescape()
 
                 angle, topleft, size, square_bitmap = find_largest_overlapping_square(singlecontour, imagecutout)
-                squares.append(Square(square_bitmap))
+                squares.append(Square(square_bitmap, center))
 
                 x = topleft[0]
                 y = topleft[1]
@@ -297,8 +301,7 @@ def findsquares(image):
                 cv2.imshow(wndname, cutout_with_frame)
                 waitforescape()
 
-
-    return []
+    return squares
 
 
 def find_largest_overlapping_square(singlecontour, imagecutout):
