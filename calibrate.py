@@ -18,8 +18,16 @@
 
 try:
     from gi.repository import Gtk
-except:
-    import gtk as Gtk
+except ImportError:
+    try:
+        import gtk as Gtk
+    except ImportError:
+        try:
+            import Tkinter as tk
+        except ImportError:
+            print 'Exhausted all possible imports of GUI libs'
+            raise
+
 
 import json
 import math
@@ -33,6 +41,61 @@ draggablePoints = []
 draggedPoint = None
 linepositions = []
 draggedLine = None
+
+def run_aspect_ratio_dialog(calibrationdata):
+    if 'Gtk' in globals():
+        run_aspect_ratio_dialog_gtk(calibrationdata)
+    else:
+        run_aspect_ratio_dialog_tk(calibrationdata)
+
+def run_aspect_ratio_dialog_tk(calibrationdata):
+    top = tk.Tk()
+
+    ratio_x = tk.StringVar()
+    ratio_x.set(calibrationdata['aspectratio'][0])
+    tk.Label(top, text='x').grid(row=0,column=0)
+    tk.Entry(top, textvariable=ratio_x).grid(row=0,column=1)
+
+    ratio_y = tk.StringVar()
+    ratio_y.set(calibrationdata['aspectratio'][1])
+    tk.Label(top, text='y').grid(row=1,column=0)
+    tk.Entry(top, textvariable=ratio_y).grid(row=1, column=1)
+
+    def ok_clicked():
+        calibrationdata['aspectratio'] = [float(ratio_x.get()), float(ratio_y.get())]
+        top.withdraw()
+        top.quit()
+
+    button = tk.Button(top, text = "OK", command = ok_clicked).grid(row=2,column=1)
+
+    top.mainloop()
+
+def run_aspect_ratio_dialog_gtk(calibrationdata):
+    win = Gtk.Window()
+    win.connect("delete-event", Gtk.main_quit)
+
+    vbox = Gtk.VBox(False, 0)
+    win.add(vbox)
+
+    entry1 = Gtk.Entry()
+    entry1.set_text(str(calibrationdata['aspectratio'][0]))
+    vbox.pack_start(entry1, True, True, 0)
+
+    entry2 = Gtk.Entry()
+    entry2.set_text(str(calibrationdata['aspectratio'][1]))
+    vbox.pack_start(entry2, True, True, 0)
+
+    def buttonclicked(window):
+        calibrationdata['aspectratio'] = [float(entry1.get_text()), float(entry2.get_text())]
+        win.hide()
+        Gtk.main_quit()
+
+    button = Gtk.Button(stock=Gtk.STOCK_CLOSE)
+    button.connect("clicked", buttonclicked)
+    vbox.pack_start(button, True, True, 0)
+
+    win.show_all()
+    Gtk.main()
 
 def eucldistance(p1, p2):
     return cv2.norm(np.array(p1) - np.array(p2))
@@ -220,33 +283,7 @@ if __name__ == "__main__":
     # Ask the user for the aspect ratio of the scrumboard (needed for perspective correction)
     #
 
-
-    win = Gtk.Window()
-    win.connect("delete-event", Gtk.main_quit)
-
-    vbox = Gtk.VBox(False, 0)
-    win.add(vbox)
-
-    entry1 = Gtk.Entry()
-    entry1.set_text(str(calibrationdata['aspectratio'][0]))
-    vbox.pack_start(entry1, True, True, 0)
-
-    entry2 = Gtk.Entry()
-    entry2.set_text(str(calibrationdata['aspectratio'][1]))
-    vbox.pack_start(entry2, True, True, 0)
-
-    def buttonclicked(window):
-        calibrationdata['aspectratio'] = [float(entry1.get_text()), float(entry2.get_text())]
-        win.hide()
-        Gtk.main_quit()
-
-    button = Gtk.Button(stock=Gtk.STOCK_CLOSE)
-    button.connect("clicked", buttonclicked)
-    vbox.pack_start(button, True, True, 0)
-
-    win.show_all()
-    Gtk.main()
-
+    run_aspect_ratio_dialog(calibrationdata)
 
     width = 1000
     height = int(width * calibrationdata['aspectratio'][1] / calibrationdata['aspectratio'][0])
