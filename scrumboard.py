@@ -37,6 +37,7 @@
 # digital tasks.
 #
 
+import copy
 import json
 import numpy as np
 import cv2
@@ -122,14 +123,28 @@ def loadcalibrationdata():
 class Scrumboard():
     def __init__(self, linepositions):
         self.linepositions = linepositions
-        self.tasknotes = set()
+        self.tasknotes = []
         self.states = ['todo', 'busy', 'blocked', 'in review', 'done']
 
     def load_state_from_file(self):
-        pass
+        with open('scrumboardstate.json', 'rb') as f:
+            self.from_serializable(json.load(f))
 
     def save_state_to_file(self):
-        pass
+        with open('scrumboardstate.json', 'wb') as f:
+            f.write(json.dumps(self.to_serializable()))
+
+    def to_serializable(self):
+        return { 'linepositions' : self.linepositions,
+                 'tasknotes' : [tasknote.to_serializable() for tasknote in self.tasknotes] }
+
+    def from_serializable(self, data):
+        self.linepositions = data['linepositions']
+        self.tasknotes = []
+        for tasknote_data in data['tasknotes']:
+            tasknote = TaskNote(None, None)
+            tasknote.from_serializable(tasknote_data)
+            self.tasknotes.append(tasknote)
 
     def get_state_from_position(self, position):
         for i, linepos in enumerate(self.linepositions):
@@ -141,14 +156,17 @@ class Scrumboard():
     def add_tasknote(self, square):
         state = self.get_state_from_position(square.position)
         tasknote = TaskNote(square.bitmap, state)
-        self.tasknotes.add(tasknote)
+        self.tasknotes.append(tasknote)
+        return tasknote
 
 class Square():
     def __init__(self, bitmap, position):
         self.bitmap = bitmap
         self.position = position
 
-    def lookslike(otherthingwithbitmap):
+    def lookslike(self, otherthingwithbitmap):
+        #diff = cv2.norm(self.bitmap, otherthingwithbitmap.bitmap, cv2.NORM_L1)
+        #print 'lookslike calculated diff of ', diff
         # self.bitmap ~ otherthingwithbitmap.bitmap
         return False
 
@@ -156,6 +174,14 @@ class TaskNote():
     def __init__(self, bitmap, state):
         self.bitmap = bitmap
         self.state = state
+
+    def to_serializable(self):
+        return { 'state' : self.state,
+                 'bitmap' : self.bitmap.tolist() }
+
+    def from_serializable(self, data):
+        self.state = data['state']
+        self.bitmap = np.array(data['bitmap'], dtype=np.uint8)
 
     def setstate(newstate):
         self.state = newstate
@@ -361,26 +387,21 @@ if __name__ == "__main__":
     correctedimage = correct_perspective(remove_color_cast(image))
 
     # The rest of this program should:
-    # - read the known state of the board from file:
-    #   (consists of bitmaps for all known notes and last known state for each)
-    # - identify any squares on the board
-    # - take their bitmaps and compare them to all known bitmaps
-    #   - for all matches found, determine which column they are in based on position and update their state
-    #   - any remaining bitmaps are new ones, store the bitmap and the state
-    # - go through the remaining unmatched bitmaps and find them on the board
-    #   - for all matches found, determine which column they are in based on position and update their state
-    #   - any remaining bitmaps are notes that are no longer visible:
-    #     - if the note was Done/Todo before, assume it's still Done/Todo
-    #     - otherwise, give a warning & highlight
-    # - for any significant area of saturation that is not covered by
-    #   recognized squares, give a warning & highlight that it looks like a bunch of notes
 
     scrumboard = Scrumboard(calibrationdata['linepositions'])
+
+    # read the known state of the board from file:
+    # (consists of bitmaps for all known notes and last known state for each)
     scrumboard.load_state_from_file()
 
+    # identify any squares on the board
     squares_in_photo = findsquares(correctedimage)
-    matches_per_square = []
 
+    # make a copy of the list of previously known task notes before we start adding new ones
+    previously_known_tasknotes = copy.copy(scrumboard.tasknotes)
+
+    # take their bitmaps and compare them to the bitmaps of all task notes that we know of
+    matches_per_square = []
     for square in squares_in_photo:
         matching_tasknotes = []
         for tasknote in scrumboard.tasknotes:
@@ -388,6 +409,8 @@ if __name__ == "__main__":
                 matching_tasknotes.append(tasknote)
         matches_per_square.append(matching_tasknotes)
 
+    # for all matches found, determine which column they are in based on position and update their state
+    # any remaining bitmaps are new ones, store the bitmap and the state
     for square, matches in zip(squares_in_photo, matches_per_square):
         if len(matches) > 1:
             raise RuntimeError('More than one task note matched a square')
@@ -397,16 +420,24 @@ if __name__ == "__main__":
         else: # len(matches) == 0
             scrumboard.add_tasknote(square)
 
-    for tasknote in scrumboard.tasknotes:
+    # go through the previously known task notes that weren't matched yet and find them on the board
+    for tasknote in previously_known_tasknotes:
         if tasknote not in set(flatten(matches_per_square)):
             position = tasknote.find(correctedimage)
+            # for all matches found, determine which column they are in based on position and update their state
             if position:
                 newstate = scrumboard.get_state_from_position(position)
                 tasknote.setstate(newstate)
+            # any remaining bitmaps are notes that are no longer visible:
             else:
+                # if the note was Done/Todo before, assume it's still Done/Todo
+                # otherwise, give a warning & highlight
                 if tasknote.state != 'done' and tasknote.state != 'todo':
                     raise RuntimeError("Can't find note and it wasn't in todo/done before")
+                    #print "Can't find note and it wasn't in todo/done before. Ignoring; note state not updated."
 
+    # for any significant area of saturation that is not covered by
+    # recognized squares, give a warning & highlight that it looks like a bunch of notes
     # TODO: find unused saturated areas
 
     scrumboard.save_state_to_file()
