@@ -29,10 +29,11 @@ except ImportError:
             raise
 
 
+import cv2
 import json
 import math
 import numpy as np
-import cv2
+import sys
 
 wndname = "Calibration";
 
@@ -43,7 +44,9 @@ linepositions = []
 draggedLine = None
 
 def run_aspect_ratio_dialog(calibrationdata):
-    if 'Gtk' in globals():
+    if '-noaspect' in sys.argv:
+        pass
+    elif 'Gtk' in globals():
         run_aspect_ratio_dialog_gtk(calibrationdata)
     else:
         run_aspect_ratio_dialog_tk(calibrationdata)
