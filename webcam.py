@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Copyright 2014 Maurice van der Pot
 #
 # This program is free software: you can redistribute it and/or modify

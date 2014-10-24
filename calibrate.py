@@ -35,6 +35,7 @@ import math
 import numpy as np
 import sys
 
+import common
 import webcam
 
 wndname = "Calibration";
@@ -289,25 +290,7 @@ if __name__ == "__main__":
     #
 
     run_aspect_ratio_dialog(calibrationdata)
-
-    aspectratio = float(calibrationdata['aspectratio'][0]) / float(calibrationdata['aspectratio'][1])
-
-    if aspectratio > 1:
-        width = 1000
-        height = int(width / aspectratio)
-    else:
-        height = 1000
-        width = int(height * aspectratio)
-
-    print 'width: ', width
-    print 'height: ', height
-
-    correctedrectangle = np.array([(0,0), (width, 0), (width, height), (0, height)], np.float32)
-
-    orderedcorners = np.array(calibrationdata['corners'], np.float32)
-    transformation = cv2.getPerspectiveTransform(orderedcorners, correctedrectangle)
-    correctedimage = cv2.warpPerspective(image, transformation, (width, height))
-
+    correctedimage = common.correct_perspective(image, calibrationdata)
 
 
     #

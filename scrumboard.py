@@ -42,6 +42,9 @@ import json
 import numpy as np
 import cv2
 
+import common
+import webcam
+
 MINIMUM_NOTE_SIZE = 40
 
 wndname = "Scrumboard"
@@ -66,7 +69,7 @@ def remove_color_cast(image):
     bgr_planes = cv2.split(image)
 
     backgroundpos = calibrationdata['background']
-    average_bgr = image[backgroundpos[0]][backgroundpos[1]]
+    average_bgr = image[backgroundpos[1]][backgroundpos[0]]
     print 'bgr of scrumboard background:', average_bgr
 
     for i in xrange(3):
@@ -191,21 +194,6 @@ class TaskNote():
 
 def flatten(list_with_sublists):
     return [item for sublist in list_with_sublists for item in sublist]
-
-def correct_perspective(image):
-    width = 1000
-    height = int(width * calibrationdata['aspectratio'][1] / calibrationdata['aspectratio'][0])
-
-    print 'width: ', width
-    print 'height: ', height
-
-    correctedrectangle = np.array([(0,0), (width, 0), (width, height), (0, height)], np.float32)
-
-    orderedcorners = np.array(calibrationdata['corners'], np.float32)
-    transformation = cv2.getPerspectiveTransform(orderedcorners, correctedrectangle)
-    correctedimage = cv2.warpPerspective(image, transformation, (width, height))
-
-    return correctedimage
 
 def findsquares(image):
     print 'showing image to search for squares'
@@ -383,8 +371,13 @@ if __name__ == "__main__":
     cv2.moveWindow(wndname, 100, 100);
 
     loadcalibrationdata()
-    image = loadimage()
-    correctedimage = correct_perspective(remove_color_cast(image))
+    image = webcam.grab()
+
+    print 'showing grabbed image'
+    cv2.imshow(wndname, image)
+    waitforescape()
+
+    correctedimage = common.correct_perspective(remove_color_cast(image), calibrationdata)
 
     # The rest of this program should:
 
