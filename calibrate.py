@@ -35,6 +35,8 @@ import math
 import numpy as np
 import sys
 
+import webcam
+
 wndname = "Calibration";
 
 calibrationdata = {}
@@ -141,11 +143,11 @@ def mouseHandler1(event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONUP:
             draggedPoint = None
 
-def drawImageWithLines(originalImage):
+def drawImageWithLines(originalImage, linepositions):
     image = originalImage.copy();
 
     for linepos in linepositions:
-        cv2.line(image, (linepos, 0), (linepos, image.shape[1] - 1), (255,0,0))
+        cv2.line(image, (linepos, 0), (linepos, image.shape[0] - 1), (255,0,0))
 
     cv2.imshow(wndname, image)
 
@@ -170,7 +172,7 @@ def mouseHandler2(event, x, y, flags, param):
 
         linepositions[draggedLine] = x
 
-        drawImageWithLines(originalImage)
+        drawImageWithLines(originalImage, linepositions)
 
         # user release left button
         if event == cv2.EVENT_LBUTTONUP:
@@ -218,7 +220,7 @@ if __name__ == "__main__":
 
     draggablePoints = calibrationdata['corners'] + [calibrationdata['background']]
 
-    image = cv2.imread("webcam.jpg", 1);
+    image = webcam.grab()
 
     drawImageWithCorners(image);
 
@@ -288,8 +290,14 @@ if __name__ == "__main__":
 
     run_aspect_ratio_dialog(calibrationdata)
 
-    width = 1000
-    height = int(width * calibrationdata['aspectratio'][1] / calibrationdata['aspectratio'][0])
+    aspectratio = float(calibrationdata['aspectratio'][0]) / float(calibrationdata['aspectratio'][1])
+
+    if aspectratio > 1:
+        width = 1000
+        height = int(width / aspectratio)
+    else:
+        height = 1000
+        width = int(height * aspectratio)
 
     print 'width: ', width
     print 'height: ', height
@@ -311,9 +319,12 @@ if __name__ == "__main__":
     linepositions = calibrationdata['linepositions']
 
     if not linepositions:
-        linepositions = sorted([(correctedimage.shape[0] / (nr_of_lines + 1) * (i + 1)) for i in xrange(nr_of_lines)])
+        linepositions = sorted([(correctedimage.shape[1] / (nr_of_lines + 1) * (i + 1)) for i in xrange(nr_of_lines)])
 
-    drawImageWithLines(correctedimage);
+    # make sure all lines are in view
+    linepositions = [min(linepos, correctedimage.shape[1] - 2) for linepos in linepositions]
+
+    drawImageWithLines(correctedimage, linepositions);
 
     cv2.setMouseCallback(wndname, mouseHandler2, correctedimage)
 
