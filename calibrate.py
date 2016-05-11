@@ -184,7 +184,7 @@ class LaneSelectionLabel(QLabel):
         self.linePositions[idx] = x
         self.redraw()
 
-    def drawImageWithLines(self.originalImage, linepositions):
+    def drawImageWithLines(self, originalImage, linepositions):
         image = originalImage.copy();
 
         for linepos in linepositions:
