@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 # Copyright 2014 Maurice van der Pot
 #
@@ -38,9 +38,10 @@
 #
 
 import copy
+import cv2
 import json
 import numpy as np
-import cv2
+import os
 
 import common
 import webcam
@@ -130,8 +131,9 @@ class Scrumboard():
         self.states = ['todo', 'busy', 'blocked', 'in review', 'done']
 
     def load_state_from_file(self):
-        with open('scrumboardstate.json', 'rb') as f:
-            self.from_serializable(json.load(f))
+        if os.path.exists('scrumboardstate.json'):
+            with open('scrumboardstate.json', 'rb') as f:
+                self.from_serializable(json.load(f))
 
     def save_state_to_file(self):
         with open('scrumboardstate.json', 'wb') as f:
@@ -216,7 +218,7 @@ def findsquares(image):
 
 
     colorless_only = 255 - color_only
-    distance_to_color = cv2.distanceTransform(colorless_only, cv2.cv.CV_DIST_L2, 3)
+    distance_to_color = cv2.distanceTransform(colorless_only, cv2.DIST_L2, 3)
 
     normdist = cv2.normalize(distance_to_color, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
     print 'showing distance_to_color'
@@ -229,7 +231,7 @@ def findsquares(image):
     cv2.imshow(wndname, sure_bg)
     #waitforescape()
 
-    distance_to_colorless = cv2.distanceTransform(color_only, cv2.cv.CV_DIST_L2, 3)
+    distance_to_colorless = cv2.distanceTransform(color_only, cv2.DIST_L2, 3)
 
     normdist = cv2.normalize(distance_to_colorless, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
     print 'showing distance_to_colorless'
@@ -243,7 +245,7 @@ def findsquares(image):
 
     sure_fg8 = np.uint8(sure_fg)
 
-    contours, hierarchy = cv2.findContours(sure_fg8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    _, contours, _ = cv2.findContours(sure_fg8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     n_comps = len(contours)
     markers = np.zeros(sure_fg.shape, np.int32)
     for i in xrange(n_comps):
@@ -266,7 +268,7 @@ def findsquares(image):
     for i in xrange(n_comps):
         singlecomponent = cv2.inRange(markers, i, i)
 
-        contours, hierarchy = cv2.findContours(singlecomponent.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, _ = cv2.findContours(singlecomponent.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         norm = cv2.normalize(singlecomponent, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
         print 'showing single component %d' % i
