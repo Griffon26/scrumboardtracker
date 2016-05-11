@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 # Copyright 2014 Maurice van der Pot
 #
@@ -16,168 +16,216 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-try:
-    from gi.repository import Gtk
-except ImportError:
-    try:
-        import gtk as Gtk
-    except ImportError:
-        try:
-            import Tkinter as tk
-        except ImportError:
-            print 'Exhausted all possible imports of GUI libs'
-            raise
-
-
 import cv2
 import json
 import math
 import numpy as np
 import sys
+import time
 
 import common
 import webcam
 
-wndname = "Calibration";
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
 
 calibrationdata = {}
-draggablePoints = []
-draggedPoint = None
-linepositions = []
-draggedLine = None
-
-def run_aspect_ratio_dialog(calibrationdata):
-    if '-noaspect' in sys.argv:
-        pass
-    elif 'Gtk' in globals():
-        run_aspect_ratio_dialog_gtk(calibrationdata)
-    else:
-        run_aspect_ratio_dialog_tk(calibrationdata)
-
-def run_aspect_ratio_dialog_tk(calibrationdata):
-    top = tk.Tk()
-
-    ratio_x = tk.StringVar()
-    ratio_x.set(calibrationdata['aspectratio'][0])
-    tk.Label(top, text='x').grid(row=0,column=0)
-    tk.Entry(top, textvariable=ratio_x).grid(row=0,column=1)
-
-    ratio_y = tk.StringVar()
-    ratio_y.set(calibrationdata['aspectratio'][1])
-    tk.Label(top, text='y').grid(row=1,column=0)
-    tk.Entry(top, textvariable=ratio_y).grid(row=1, column=1)
-
-    def ok_clicked():
-        calibrationdata['aspectratio'] = [float(ratio_x.get()), float(ratio_y.get())]
-        top.withdraw()
-        top.quit()
-
-    button = tk.Button(top, text = "OK", command = ok_clicked).grid(row=2,column=1)
-
-    top.mainloop()
-
-def run_aspect_ratio_dialog_gtk(calibrationdata):
-    win = Gtk.Window()
-    win.connect("delete-event", Gtk.main_quit)
-
-    vbox = Gtk.VBox(False, 0)
-    win.add(vbox)
-
-    entry1 = Gtk.Entry()
-    entry1.set_text(str(calibrationdata['aspectratio'][0]))
-    vbox.pack_start(entry1, True, True, 0)
-
-    entry2 = Gtk.Entry()
-    entry2.set_text(str(calibrationdata['aspectratio'][1]))
-    vbox.pack_start(entry2, True, True, 0)
-
-    def buttonclicked(window):
-        calibrationdata['aspectratio'] = [float(entry1.get_text()), float(entry2.get_text())]
-        win.hide()
-        Gtk.main_quit()
-
-    button = Gtk.Button(stock=Gtk.STOCK_CLOSE)
-    button.connect("clicked", buttonclicked)
-    vbox.pack_start(button, True, True, 0)
-
-    win.show_all()
-    Gtk.main()
 
 def eucldistance(p1, p2):
     return cv2.norm(np.array(p1) - np.array(p2))
 
-def drawImageWithCorners(originalImage):
-    image = originalImage.copy();
+def cvimage_to_qpixmap(image_bgr):
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-    for p1, p2 in zip(draggablePoints[:4], [draggablePoints[-2]] + draggablePoints):
-        cv2.line(image, p1, p2, (255,0,0))
-        cv2.circle(image, p1, 3, (255,0,0), 2)
+    height, width, channel = image_rgb.shape
+    qimage = QImage(image_rgb.data, width, height, width * 3, QImage.Format_RGB888)
+    qpixmap = QPixmap(qimage)
 
-    cv2.circle(image, draggablePoints[-1], 10, (0,0,255), 2)
+    return qpixmap
 
-    cv2.imshow(wndname, image)
+class BoardSelectionLabel(QLabel):
+    def __init__(self, image, points):
+        QLabel.__init__(self, None)
+        self.setMouseTracking(True)
 
-def mouseHandler1(event, x, y, flags, param):
-    global draggablePoints, draggedPoint
+        self.originalImage = image
+        self.draggedPoint = None
+        self.draggablePoints = points
 
-    originalImage = param
+        self.redraw()
 
-    # user press left button
-    if event == cv2.EVENT_LBUTTONDOWN and draggedPoint == None:
-        for i, p in enumerate(draggablePoints):
-            if eucldistance(p, (x,y)) < 10:
-                draggedPoint = i
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.draggedPoint == None:
+            for i, p in enumerate(self.draggablePoints):
+                if eucldistance(p, (event.pos().x(), event.pos().y())) < 10:
+                    self.draggedPoint = i
 
-    # user drag the mouse
-    if ( (event == cv2.EVENT_MOUSEMOVE or event == cv2.EVENT_LBUTTONUP) and draggedPoint != None):
+    def mouseMoveEvent(self, event):
+        x = event.pos().x()
+        y = event.pos().y()
+        if self.draggedPoint != None:
+            self.updatePointPosition(self.draggedPoint, x, y)
 
+    def mouseReleaseEvent(self, event):
+        x = event.pos().x()
+        y = event.pos().y()
+        if self.draggedPoint != None:
+            self.updatePointPosition(self.draggedPoint, x, y)
+            self.draggedPoint = None
+
+    def updatePointPosition(self, idx, x, y):
         if x < 0:
             x = 0
         if y < 0:
             y = 0
 
-        draggablePoints[draggedPoint] = (x,y)
+        self.draggablePoints[idx] = (x,y)
+        self.redraw()
 
-        drawImageWithCorners(originalImage)
+    def drawImageWithCorners(self, originalImage, points):
+        image = originalImage.copy();
 
-        # user release left button
-        if event == cv2.EVENT_LBUTTONUP:
-            draggedPoint = None
+        for p1, p2 in zip(points[:4], [points[-2]] + points):
+            cv2.line(image, p1, p2, (255,0,0))
+            cv2.circle(image, p1, 3, (255,0,0), 2)
 
-def drawImageWithLines(originalImage, linepositions):
-    image = originalImage.copy();
+        cv2.circle(image, points[-1], 10, (0,0,255), 2)
+        return image
 
-    for linepos in linepositions:
-        cv2.line(image, (linepos, 0), (linepos, image.shape[0] - 1), (255,0,0))
+    def redraw(self):
+        image_with_corners = self.drawImageWithCorners(self.originalImage, self.draggablePoints)
+        pixmap = cvimage_to_qpixmap(image_with_corners)
+	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
+        self.setPixmap(pixmap)
 
-    cv2.imshow(wndname, image)
+            
+class BoardSelectionDialog(QDialog):
+    
+    def __init__(self, image, points, aspectratio):
+        super(BoardSelectionDialog, self).__init__()
 
-def mouseHandler2(event, x, y, flags, param):
-    global linepositions, draggedLine
+        label = BoardSelectionLabel(image, points)
 
-    originalImage = param
+        buttonBox = QDialogButtonBox(self)
+        buttonBox.setGeometry(QRect(150, 250, 341, 32))
+        buttonBox.setOrientation(Qt.Horizontal)
+        buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
+        buttonBox.setObjectName("buttonBox")
+	
+        vbox = QVBoxLayout()
+        vbox.addWidget(label)
 
-    # user press left button
-    if event == cv2.EVENT_LBUTTONDOWN and draggedLine == None:
-        for i, linepos in enumerate(linepositions):
-            if abs(x - linepos) < 10:
-                draggedLine = i
+        self.widthEdit = QLineEdit()
+        self.widthEdit.setValidator( QDoubleValidator(0, 100, 2, self) )
+        self.widthEdit.setText(str(aspectratio[0]))
+        self.heightEdit = QLineEdit()
+        self.heightEdit.setValidator( QDoubleValidator(0, 100, 2, self) )
+        self.heightEdit.setText(str(aspectratio[1]))
 
-    # user drag the mouse
-    if ( (event == cv2.EVENT_MOUSEMOVE or event == cv2.EVENT_LBUTTONUP) and draggedLine != None):
+        hbox = QHBoxLayout()
+        
+        hbox.addWidget(self.widthEdit)
+        hbox.addWidget(self.heightEdit)
+        hbox.addWidget(buttonBox)
+        vbox.addLayout(hbox)
 
+        self.setLayout(vbox)
+
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+
+        self.points = points
+
+    def getDraggablePoints(self):
+        return self.points
+
+    def getAspectRatio(self):
+        return [float(self.widthEdit.text()), float(self.heightEdit.text())]
+
+class LaneSelectionLabel(QLabel):
+    def __init__(self, image, linePositions):
+        QLabel.__init__(self, None)
+        self.setMouseTracking(True)
+
+        self.originalImage = image
+        self.draggedLine = None
+        self.linePositions = linePositions
+
+        print 'original line width', self.originalImage.shape[1]
+
+        self.redraw()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.draggedLine == None:
+            for i, p in enumerate(self.linePositions):
+                if abs(event.pos().x() - p) < 10:
+                    self.draggedLine = i
+
+    def mouseMoveEvent(self, event):
+        x = event.pos().x()
+        y = event.pos().y()
+        if self.draggedLine != None:
+            self.updateLinePosition(self.draggedLine, x, y)
+
+    def mouseReleaseEvent(self, event):
+        x = event.pos().x()
+        y = event.pos().y()
+        if self.draggedLine != None:
+            self.updateLinePosition(self.draggedLine, x, y)
+            self.draggedLine = None
+
+    def updateLinePosition(self, idx, x, y):
         if x < 0:
             x = 0
-        if x >= originalImage.shape[0]:
-            x = originalImage.shape[0] - 1
+        if x >= self.originalImage.shape[1]:
+            x = self.originalImage.shape[1] - 1
 
-        linepositions[draggedLine] = x
+        self.linePositions[idx] = x
+        self.redraw()
 
-        drawImageWithLines(originalImage, linepositions)
+    def drawImageWithLines(self.originalImage, linepositions):
+        image = originalImage.copy();
 
-        # user release left button
-        if event == cv2.EVENT_LBUTTONUP:
-            draggedLine = None
+        for linepos in linepositions:
+            cv2.line(image, (linepos, 0), (linepos, image.shape[0] - 1), (255,0,0))
+
+        return image
+
+    def redraw(self):
+        image_with_lines = self.drawImageWithLines(self.originalImage, self.linePositions)
+        pixmap = cvimage_to_qpixmap(image_with_lines)
+	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
+        self.setPixmap(pixmap)
+
+ 
+class LaneSelectionDialog(QDialog):
+    
+    def __init__(self, image, linePositions):
+        super(LaneSelectionDialog, self).__init__()
+
+        label = LaneSelectionLabel(image, linePositions)
+
+        buttonBox = QDialogButtonBox(self)
+        buttonBox.setGeometry(QRect(150, 250, 341, 32))
+        buttonBox.setOrientation(Qt.Horizontal)
+        buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
+        buttonBox.setObjectName("buttonBox")
+	
+        vbox = QVBoxLayout()
+        vbox.addWidget(label)
+
+        vbox.addWidget(buttonBox)
+
+        self.setLayout(vbox)
+
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+
+        self.linePositions = linePositions
+
+    def getLinePositions(self):
+        return self.linePositions
 
 def loadCalibrationData():
     global calibrationdata
@@ -210,8 +258,8 @@ def saveCalibrationData():
         f.write(json.dumps(calibrationdata))
 
 if __name__ == "__main__":
-    cv2.namedWindow( wndname, 1 );
-    cv2.moveWindow(wndname, 100, 100);
+
+    app = QApplication(sys.argv)
 
     loadCalibrationData()
 
@@ -223,18 +271,14 @@ if __name__ == "__main__":
 
     image = webcam.grab()
 
-    drawImageWithCorners(image);
+    dlg = BoardSelectionDialog(image, draggablePoints, calibrationdata['aspectratio'])
+    if dlg.exec_() != 1:
+        raise Exception('Calibration was aborted by the user')
 
-    cv2.setMouseCallback(wndname, mouseHandler1, image)
-
-    while 1:
-        k = cv2.waitKey(1) & 0xFF;
-        if k == 27:
-            break
-
-
+    draggablePoints = dlg.getDraggablePoints()
     calibrationdata['corners'] = draggablePoints[0:4]
     calibrationdata['background'] = draggablePoints[4]
+    calibrationdata['aspectratio'] = dlg.getAspectRatio()
 
 
     #
@@ -258,9 +302,9 @@ if __name__ == "__main__":
     acos_left = math.acos(abs(xdiff_left) / eucldistance(leftpoint, toppoint))
     acos_right = math.acos(abs(xdiff_right) / eucldistance(rightpoint, toppoint))
 
-    print 'top', toppoint
-    print 'left', leftpoint
-    print 'right', rightpoint
+    print('top', toppoint)
+    print('left', leftpoint)
+    print('right', rightpoint)
 
     if acos_left < acos_right:
         othertopindex = leftindex
@@ -289,7 +333,6 @@ if __name__ == "__main__":
     # Ask the user for the aspect ratio of the scrumboard (needed for perspective correction)
     #
 
-    run_aspect_ratio_dialog(calibrationdata)
     correctedimage = common.correct_perspective(image, calibrationdata)
 
 
@@ -300,6 +343,7 @@ if __name__ == "__main__":
     nr_of_lines = 4
 
     linepositions = calibrationdata['linepositions']
+    print 'initial line positions:', linepositions
 
     if not linepositions:
         linepositions = sorted([(correctedimage.shape[1] / (nr_of_lines + 1) * (i + 1)) for i in xrange(nr_of_lines)])
@@ -307,17 +351,12 @@ if __name__ == "__main__":
     # make sure all lines are in view
     linepositions = [min(linepos, correctedimage.shape[1] - 2) for linepos in linepositions]
 
-    drawImageWithLines(correctedimage, linepositions);
+    dlg = LaneSelectionDialog(correctedimage, linepositions)
+    if dlg.exec_() != 1:
+        raise Exception('Calibration was aborted by the user')
 
-    cv2.setMouseCallback(wndname, mouseHandler2, correctedimage)
-
-    while 1:
-        k = cv2.waitKey(1) & 0xFF;
-        if k == 27:
-            break
-
-
-    calibrationdata['linepositions'] = linepositions
+    calibrationdata['linepositions'] = dlg.getLinePositions()
+    print 'final line positions:', calibrationdata['linepositions']
 
     saveCalibrationData()
 
