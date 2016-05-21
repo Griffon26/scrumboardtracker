@@ -206,6 +206,9 @@ def findsquares(image):
 
     hsv = cv2.cvtColor( denoised, cv2.COLOR_BGR2HSV )
     _, saturation, _ = cv2.split(hsv)
+    print 'showing saturation'
+    cv2.imshow(wndname, saturation)
+    waitforescape()
 
     color_only = cv2.inRange(saturation, 25, 255)
 
@@ -214,7 +217,7 @@ def findsquares(image):
     color_only = cv2.morphologyEx(color_only, cv2.MORPH_OPEN, kernel)
     print 'showing color_only'
     cv2.imshow(wndname, color_only)
-    #waitforescape()
+    waitforescape()
 
 
     colorless_only = 255 - color_only
@@ -223,25 +226,25 @@ def findsquares(image):
     normdist = cv2.normalize(distance_to_color, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
     print 'showing distance_to_color'
     cv2.imshow(wndname, normdist)
-    #waitforescape()
+    waitforescape()
 
     _, sure_bg = cv2.threshold(distance_to_color, 20, 1, cv2.THRESH_BINARY)
 
     print 'showing sure_bg'
     cv2.imshow(wndname, sure_bg)
-    #waitforescape()
+    waitforescape()
 
     distance_to_colorless = cv2.distanceTransform(color_only, cv2.DIST_L2, 3)
 
     normdist = cv2.normalize(distance_to_colorless, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
     print 'showing distance_to_colorless'
     cv2.imshow(wndname, normdist)
-    #waitforescape()
+    waitforescape()
 
     _, sure_fg = cv2.threshold(distance_to_colorless, 20, 1, cv2.THRESH_BINARY)
     print 'showing sure_fg'
     cv2.imshow(wndname, sure_fg)
-    #waitforescape()
+    waitforescape()
 
     sure_fg8 = np.uint8(sure_fg)
 
@@ -255,9 +258,10 @@ def findsquares(image):
     normmarkers = cv2.normalize(markers, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
     print 'showing markers before watershed'
     cv2.imshow(wndname, normmarkers)
-    #waitforescape()
+    waitforescape()
 
-    cv2.watershed(hsv, markers)
+    watershed_input = cv2.cvtColor(saturation,cv2.COLOR_GRAY2RGB);
+    cv2.watershed(watershed_input, markers)
 
     normmarkers = cv2.normalize(markers, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
     print 'showing markers after watershed'
