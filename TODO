@@ -1,5 +1,10 @@
-- get image from webcam
 - take photos with a webcam (higher resolution than taking a frame from the video stream). Avoid lossy encoding if at all possible.
 - write build script
 	+include dependencies for numpy, opencv, python 2.7.
+- what to do with squares incorrectly found inside a large blob of notes
+
+Sequence:
+* recognize squares
+* match with previously known squares
+* look for not matched previously known squares in photo
 

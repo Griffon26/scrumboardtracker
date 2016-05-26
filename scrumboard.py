@@ -46,10 +46,12 @@ import os
 import common
 import webcam
 
-MINIMUM_NOTE_SIZE = 40
 
 wndname = "Scrumboard"
 calibrationdata = None
+
+class NoMatchingSquareError(Exception):
+    pass
 
 def waitforescape():
     while 1:
@@ -212,7 +214,7 @@ def findsquares(image):
 
     color_only = cv2.inRange(saturation, 25, 255)
 
-    kernel = np.ones((3,3), np.uint8)
+    kernel = np.ones((2,2), np.uint8)
     color_only = cv2.morphologyEx(color_only, cv2.MORPH_CLOSE, kernel)
     color_only = cv2.morphologyEx(color_only, cv2.MORPH_OPEN, kernel)
     print 'showing color_only'
@@ -228,7 +230,7 @@ def findsquares(image):
     cv2.imshow(wndname, normdist)
     waitforescape()
 
-    _, sure_bg = cv2.threshold(distance_to_color, 20, 1, cv2.THRESH_BINARY)
+    _, sure_bg = cv2.threshold(distance_to_color, common.NOTE_SIZE / 2.3, 1, cv2.THRESH_BINARY)
 
     print 'showing sure_bg'
     cv2.imshow(wndname, sure_bg)
@@ -241,7 +243,7 @@ def findsquares(image):
     cv2.imshow(wndname, normdist)
     waitforescape()
 
-    _, sure_fg = cv2.threshold(distance_to_colorless, 20, 1, cv2.THRESH_BINARY)
+    _, sure_fg = cv2.threshold(distance_to_colorless, common.NOTE_SIZE / 2.3, 1, cv2.THRESH_BINARY)
     print 'showing sure_fg'
     cv2.imshow(wndname, sure_fg)
     waitforescape()
@@ -296,7 +298,11 @@ def findsquares(image):
                 cv2.imshow(wndname, singlecontour)
                 #waitforescape()
 
-                angle, topleft, size, square_bitmap = find_largest_overlapping_square(singlecontour, imagecutout)
+                try:
+                    angle, topleft, size, square_bitmap = find_largest_overlapping_square(singlecontour, imagecutout)
+                except NoMatchingSquareError:
+                    # continue with the next component
+                    continue
                 squares.append(Square(square_bitmap, center))
 
                 x = topleft[0]
@@ -330,6 +336,9 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
     newcenter = (singlecontour.shape[0] / 2, singlecontour.shape[1] / 2)
 
+    print('imagecutout.shape', imagecutout.shape)
+    cv2.imshow(wndname, imagecutout)
+
     for angle in xrange(-16,17):
         rotation = cv2.getRotationMatrix2D(newcenter, angle, 1.0)
         rotatedcontour = cv2.warpAffine(singlecontour, rotation, singlecontour.shape)
@@ -339,7 +348,7 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
         offsetcontour = rotatedcontour.astype(np.float32) - 160
 
-        for kernel_size in xrange(50,imagecutout.shape[0]):
+        for kernel_size in xrange(common.NOTE_SIZE, int(min(imagecutout.shape[0], common.NOTE_SIZE * 1.1))):
             boxfiltered = cv2.boxFilter(offsetcontour, -1, (kernel_size, kernel_size), None, (0,0), False)
 
             norm = cv2.normalize(boxfiltered, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
@@ -352,7 +361,7 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
             minVal, maxVal, _, maxLoc = cv2.minMaxLoc(boxfiltered, mask)
 
-            #print 'max is %s at angle %s and size %s' % (maxVal, angle, kernel_size)
+            print 'max is %s at angle %s and size %s' % (maxVal, angle, kernel_size)
             if maxVal > overallMax:
                 overallMax = maxVal
                 overallMaxLoc = maxLoc
@@ -360,7 +369,7 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
                 overallMaxKernelSize = kernel_size
 
     bitmap = None
-    if overallMax > 0:
+    if overallMax > 0 and overallMaxKernelSize < common.NOTE_SIZE * 1.1:
         rotation = cv2.getRotationMatrix2D(newcenter, overallMaxAngle, 1.0)
         rotatedimagecutout = cv2.warpAffine(imagecutout, rotation, imagecutout.shape[0:2])
         bitmap = rotatedimagecutout[overallMaxLoc[0]:overallMaxLoc[0] + overallMaxKernelSize, overallMaxLoc[1]:overallMaxLoc[1] + overallMaxKernelSize]
@@ -368,6 +377,8 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
         print 'showing largest overlapping square'
         cv2.imshow(wndname, bitmap)
         #waitforescape()
+    else:
+        raise NoMatchingSquareError()
 
     return -overallMaxAngle, overallMaxLoc, overallMaxKernelSize, bitmap
 
@@ -383,7 +394,7 @@ if __name__ == "__main__":
     cv2.imshow(wndname, image)
     waitforescape()
 
-    correctedimage = common.correct_perspective(remove_color_cast(image), calibrationdata)
+    correctedimage = common.correct_perspective(remove_color_cast(image), calibrationdata, False)
 
     # The rest of this program should:
 
@@ -432,8 +443,8 @@ if __name__ == "__main__":
                 # if the note was Done/Todo before, assume it's still Done/Todo
                 # otherwise, give a warning & highlight
                 if tasknote.state != 'done' and tasknote.state != 'todo':
-                    raise RuntimeError("Can't find note and it wasn't in todo/done before")
-                    #print "Can't find note and it wasn't in todo/done before. Ignoring; note state not updated."
+                    #raise RuntimeError("Can't find note and it wasn't in todo/done before")
+                    print "Can't find note and it wasn't in todo/done before. Ignoring; note state not updated."
 
     # for any significant area of saturation that is not covered by
     # recognized squares, give a warning & highlight that it looks like a bunch of notes

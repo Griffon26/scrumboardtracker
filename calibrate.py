@@ -32,9 +32,6 @@ from PyQt5.QtWidgets import *
 
 calibrationdata = {}
 
-def eucldistance(p1, p2):
-    return cv2.norm(np.array(p1) - np.array(p2))
-
 def cvimage_to_qpixmap(image_bgr):
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
@@ -58,7 +55,7 @@ class BoardSelectionLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.draggedPoint == None:
             for i, p in enumerate(self.draggablePoints):
-                if eucldistance(p, (event.pos().x(), event.pos().y())) < 10:
+                if common.eucldistance(p, (event.pos().x(), event.pos().y())) < 10:
                     self.draggedPoint = i
 
     def mouseMoveEvent(self, event):
@@ -144,13 +141,15 @@ class BoardSelectionDialog(QDialog):
         return [float(self.widthEdit.text()), float(self.heightEdit.text())]
 
 class LaneSelectionLabel(QLabel):
-    def __init__(self, image, linePositions):
+    def __init__(self, image, linePositions, noteCorners):
         QLabel.__init__(self, None)
         self.setMouseTracking(True)
 
         self.originalImage = image
         self.draggedLine = None
+        self.draggedPoint = None
         self.linePositions = linePositions
+        self.noteCorners = noteCorners
 
         print 'original line width', self.originalImage.shape[1]
 
@@ -158,20 +157,30 @@ class LaneSelectionLabel(QLabel):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.draggedLine == None:
+            for i in (0, 1):
+                if common.eucldistance(self.noteCorners[i], (event.pos().x(), event.pos().y())) < 10:
+                    self.draggedPoint = i
+                    return
             for i, p in enumerate(self.linePositions):
                 if abs(event.pos().x() - p) < 10:
                     self.draggedLine = i
+                    return
 
     def mouseMoveEvent(self, event):
         x = event.pos().x()
         y = event.pos().y()
-        if self.draggedLine != None:
+        if self.draggedPoint != None:
+            self.updatePointPosition(self.draggedPoint, x, y)
+        elif self.draggedLine != None:
             self.updateLinePosition(self.draggedLine, x, y)
 
     def mouseReleaseEvent(self, event):
         x = event.pos().x()
         y = event.pos().y()
-        if self.draggedLine != None:
+        if self.draggedPoint != None:
+            self.updatePointPosition(self.draggedPoint, x, y)
+            self.draggedPoint = None
+        elif self.draggedLine != None:
             self.updateLinePosition(self.draggedLine, x, y)
             self.draggedLine = None
 
@@ -184,16 +193,29 @@ class LaneSelectionLabel(QLabel):
         self.linePositions[idx] = x
         self.redraw()
 
-    def drawImageWithLines(self, originalImage, linepositions):
+    def updatePointPosition(self, idx, x, y):
+        if x < 0:
+            x = 0
+        if x >= self.originalImage.shape[1]:
+            x = self.originalImage.shape[1] - 1
+
+        self.noteCorners[idx] = (x, y)
+        self.redraw()
+
+    def drawImageWithLines(self, originalImage, linepositions, noteCorners):
         image = originalImage.copy();
 
         for linepos in linepositions:
             cv2.line(image, (linepos, 0), (linepos, image.shape[0] - 1), (255,0,0))
 
+        cv2.rectangle(image, noteCorners[0], noteCorners[1], (0,0,255))
+        cv2.circle(image, noteCorners[0], 3, (0,0,255), 2)
+        cv2.circle(image, noteCorners[1], 3, (0,0,255), 2)
+
         return image
 
     def redraw(self):
-        image_with_lines = self.drawImageWithLines(self.originalImage, self.linePositions)
+        image_with_lines = self.drawImageWithLines(self.originalImage, self.linePositions, self.noteCorners)
         pixmap = cvimage_to_qpixmap(image_with_lines)
 	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
         self.setPixmap(pixmap)
@@ -201,10 +223,10 @@ class LaneSelectionLabel(QLabel):
  
 class LaneSelectionDialog(QDialog):
     
-    def __init__(self, image, linePositions):
+    def __init__(self, image, linePositions, noteCorners):
         super(LaneSelectionDialog, self).__init__()
 
-        label = LaneSelectionLabel(image, linePositions)
+        label = LaneSelectionLabel(image, linePositions, noteCorners)
 
         buttonBox = QDialogButtonBox(self)
         buttonBox.setGeometry(QRect(150, 250, 341, 32))
@@ -223,9 +245,13 @@ class LaneSelectionDialog(QDialog):
         buttonBox.rejected.connect(self.reject)
 
         self.linePositions = linePositions
+        self.noteCorners = noteCorners
 
     def getLinePositions(self):
         return self.linePositions
+
+    def getNoteCorners(self):
+        return self.noteCorners
 
 def loadCalibrationData():
     global calibrationdata
@@ -252,6 +278,11 @@ def loadCalibrationData():
 
     if 'linepositions' not in calibrationdata:
         calibrationdata['linepositions'] = None
+
+    if 'notecorners' not in calibrationdata:
+        calibrationdata['notecorners'] = None
+    else:
+        calibrationdata['notecorners'] = [ (x, y) for x, y in calibrationdata['notecorners'] ]
 
 def saveCalibrationData():
     with open('calibrationdata.json', 'wb') as f:
@@ -299,8 +330,8 @@ if __name__ == "__main__":
     xdiff_right, ydiff_right = abs_distance_per_axis(toppoint, rightpoint)
     xdiff_left, ydiff_left = abs_distance_per_axis(toppoint, leftpoint)
 
-    acos_left = math.acos(abs(xdiff_left) / eucldistance(leftpoint, toppoint))
-    acos_right = math.acos(abs(xdiff_right) / eucldistance(rightpoint, toppoint))
+    acos_left = math.acos(abs(xdiff_left) / common.eucldistance(leftpoint, toppoint))
+    acos_right = math.acos(abs(xdiff_right) / common.eucldistance(rightpoint, toppoint))
 
     print('top', toppoint)
     print('left', leftpoint)
@@ -333,7 +364,7 @@ if __name__ == "__main__":
     # Ask the user for the aspect ratio of the scrumboard (needed for perspective correction)
     #
 
-    correctedimage = common.correct_perspective(image, calibrationdata)
+    correctedimage = common.correct_perspective(image, calibrationdata, True)
 
 
     #
@@ -343,20 +374,25 @@ if __name__ == "__main__":
     nr_of_lines = 4
 
     linepositions = calibrationdata['linepositions']
-    print 'initial line positions:', linepositions
+    noteCorners = calibrationdata['notecorners']
 
     if not linepositions:
         linepositions = sorted([(correctedimage.shape[1] / (nr_of_lines + 1) * (i + 1)) for i in xrange(nr_of_lines)])
 
+    if not noteCorners:
+        noteCorners = [(10, 10), (50, 50)]
+
     # make sure all lines are in view
     linepositions = [min(linepos, correctedimage.shape[1] - 2) for linepos in linepositions]
 
-    dlg = LaneSelectionDialog(correctedimage, linepositions)
+    dlg = LaneSelectionDialog(correctedimage, linepositions, noteCorners)
     if dlg.exec_() != 1:
         raise Exception('Calibration was aborted by the user')
 
     calibrationdata['linepositions'] = dlg.getLinePositions()
-    print 'final line positions:', calibrationdata['linepositions']
+    calibrationdata['notecorners'] = dlg.getNoteCorners()
+    c1, c2 = calibrationdata['notecorners']
+    calibrationdata['averagenotesize'] = (abs(c1[0] - c2[0]) + abs(c1[1] - c2[1])) / 2
 
     saveCalibrationData()
 

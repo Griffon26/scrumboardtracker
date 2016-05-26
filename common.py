@@ -16,22 +16,31 @@
 import cv2
 import numpy as np
 
-def correct_perspective(image, calibrationdata):
+NOTE_SIZE = 50
+
+def eucldistance(p1, p2):
+    return cv2.norm(np.array(p1) - np.array(p2))
+
+def correct_perspective(image, calibrationdata, fixedscale):
     aspectratio = float(calibrationdata['aspectratio'][0]) / float(calibrationdata['aspectratio'][1])
 
-    if aspectratio > 1:
-        width = 1000
-        height = int(width / aspectratio)
+    if fixedscale:
+        scale = 1
     else:
-        height = 1000
-        width = int(height * aspectratio)
+        scale = (1.0 * NOTE_SIZE) / calibrationdata['averagenotesize']
+    print('scale', scale)
+
+    orderedcorners = np.array(calibrationdata['corners'], np.float32)
+    originalwidth = eucldistance(orderedcorners[0], orderedcorners[1])
+    scaledwidth = originalwidth * scale
+    width = int(scaledwidth)
+    height = int(width / aspectratio)
 
     print 'width: ', width
     print 'height: ', height
 
     correctedrectangle = np.array([(0,0), (width, 0), (width, height), (0, height)], np.float32)
 
-    orderedcorners = np.array(calibrationdata['corners'], np.float32)
     transformation = cv2.getPerspectiveTransform(orderedcorners, correctedrectangle)
     correctedimage = cv2.warpPerspective(image, transformation, (width, height))
 
