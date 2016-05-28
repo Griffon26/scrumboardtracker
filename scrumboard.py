@@ -42,13 +42,64 @@ import cv2
 import json
 import numpy as np
 import os
+import sys
 
 import common
 import webcam
 
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
 
 wndname = "Scrumboard"
 calibrationdata = None
+
+class ImageLabel(QLabel):
+    def __init__(self, image):
+        QLabel.__init__(self, None)
+
+        self.image = image
+        self.redraw()
+
+    def redraw(self):
+        pixmap = common.cvimage_to_qpixmap(self.image)
+	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
+        self.setPixmap(pixmap)
+
+class ImageDialog(QDialog):
+    
+    def __init__(self, images, text=None):
+        super(ImageDialog, self).__init__()
+
+        if not isinstance(images, (list, tuple)):
+            images = [images]
+
+        vbox = QVBoxLayout()
+
+        if text != None:
+            vbox.addWidget(QLabel(text))
+
+        hbox = QHBoxLayout()
+        for image in images:
+            hbox.addWidget(ImageLabel(image))
+        vbox.addLayout(hbox)
+
+        buttonBox = QDialogButtonBox(self)
+        buttonBox.setGeometry(QRect(150, 250, 341, 32))
+        buttonBox.setOrientation(Qt.Horizontal)
+        buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
+        buttonBox.setObjectName("buttonBox")
+        vbox.addWidget(buttonBox)
+
+        self.setLayout(vbox)
+
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+
+def qimshow(images, text=None):
+    dlg = ImageDialog(images, text)
+    if dlg.exec_() != 1:
+        raise Exception('Aborting. User pressed cancel.')
 
 class NoMatchingSquareError(Exception):
     pass
@@ -58,14 +109,6 @@ def waitforescape():
         k = cv2.waitKey(1) & 0xFF;
         if k == 27:
             break
-
-
-def loadimage():
-    image = cv2.imread("webcam.jpg", 1);
-    cv2.imshow(wndname, image)
-    #waitforescape()
-
-    return image
 
 
 def remove_color_cast(image):
@@ -79,44 +122,37 @@ def remove_color_cast(image):
         thresh = average_bgr[i]
         plane = bgr_planes[i]
         print "Showing plane"
-        cv2.imshow(wndname, plane);
-        #waitforescape()
+        #qimshow(plane);
 
         retval, mask = cv2.threshold(plane, thresh, 255, cv2.THRESH_BINARY);
         print "Showing mask"
-        cv2.imshow(wndname, mask)
-        #waitforescape()
+        #qimshow(mask)
 
         highvalues = (plane - thresh) * (128.0 / (255 - thresh)) + 128;
         highvalues = highvalues.astype(np.uint8)
 
         highvalues_masked = cv2.bitwise_and(highvalues, mask)
         print "Showing scaled high values"
-        cv2.imshow(wndname, highvalues_masked)
-        #waitforescape()
+        #qimshow(highvalues_masked)
 
         mask = 255 - mask;
         lowvalues = cv2.bitwise_and(plane, mask)
         print "Showing low values"
-        cv2.imshow(wndname, lowvalues)
-        #waitforescape()
+        #qimshow(lowvalues)
 
         lowvalues = lowvalues * 128.0 / thresh
         lowvalues = lowvalues.astype(np.uint8)
         print "Showing scaled low values"
-        cv2.imshow(wndname, lowvalues)
-        #waitforescape()
+        #qimshow(lowvalues)
 
         bgr_planes[i] = lowvalues + highvalues_masked
         print "Showing scaled plane"
-        cv2.imshow(wndname, bgr_planes[i])
-        #waitforescape()
+        #qimshow(bgr_planes[i])
 
     correctedimage = cv2.merge(bgr_planes)
     correctedimage = correctedimage.astype(np.uint8)
     print "Showing corrected image"
-    cv2.imshow(wndname, correctedimage)
-    #waitforescape()
+    #qimshow(correctedimage)
 
     return correctedimage
 
@@ -201,16 +237,14 @@ def flatten(list_with_sublists):
 
 def findsquares(image):
     print 'showing image to search for squares'
-    cv2.imshow(wndname, image)
-    waitforescape()
+    qimshow(image)
 
     denoised = cv2.pyrUp(cv2.pyrDown(image))
 
     hsv = cv2.cvtColor( denoised, cv2.COLOR_BGR2HSV )
     _, saturation, _ = cv2.split(hsv)
     print 'showing saturation'
-    cv2.imshow(wndname, saturation)
-    waitforescape()
+    #qimshow(saturation)
 
     color_only = cv2.inRange(saturation, 25, 255)
 
@@ -218,8 +252,7 @@ def findsquares(image):
     color_only = cv2.morphologyEx(color_only, cv2.MORPH_CLOSE, kernel)
     color_only = cv2.morphologyEx(color_only, cv2.MORPH_OPEN, kernel)
     print 'showing color_only'
-    cv2.imshow(wndname, color_only)
-    waitforescape()
+    #qimshow(color_only)
 
 
     colorless_only = 255 - color_only
@@ -227,26 +260,22 @@ def findsquares(image):
 
     normdist = cv2.normalize(distance_to_color, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
     print 'showing distance_to_color'
-    cv2.imshow(wndname, normdist)
-    waitforescape()
+    #qimshow(normdist)
 
     _, sure_bg = cv2.threshold(distance_to_color, common.NOTE_SIZE / 2.3, 1, cv2.THRESH_BINARY)
 
     print 'showing sure_bg'
-    cv2.imshow(wndname, sure_bg)
-    waitforescape()
+    #qimshow(sure_bg)
 
     distance_to_colorless = cv2.distanceTransform(color_only, cv2.DIST_L2, 3)
 
     normdist = cv2.normalize(distance_to_colorless, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-    print 'showing distance_to_colorless'
-    cv2.imshow(wndname, normdist)
-    waitforescape()
+    #print 'showing distance_to_colorless'
+    #qimshow(normdist)
 
     _, sure_fg = cv2.threshold(distance_to_colorless, common.NOTE_SIZE / 2.3, 1, cv2.THRESH_BINARY)
-    print 'showing sure_fg'
-    cv2.imshow(wndname, sure_fg)
-    waitforescape()
+    #print 'showing sure_fg'
+    #qimshow(sure_fg)
 
     sure_fg8 = np.uint8(sure_fg)
 
@@ -258,17 +287,15 @@ def findsquares(image):
     markers[sure_bg == 1] = n_comps + 1
 
     normmarkers = cv2.normalize(markers, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-    print 'showing markers before watershed'
-    cv2.imshow(wndname, normmarkers)
-    waitforescape()
+    #print 'showing markers before watershed'
+    #qimshow(normmarkers)
 
     watershed_input = cv2.cvtColor(saturation,cv2.COLOR_GRAY2RGB);
     cv2.watershed(watershed_input, markers)
 
     normmarkers = cv2.normalize(markers, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-    print 'showing markers after watershed'
-    cv2.imshow(wndname, normmarkers)
-    waitforescape()
+    #print 'showing markers after watershed'
+    #qimshow(normmarkers)
 
     squares = []
     for i in xrange(n_comps):
@@ -278,8 +305,7 @@ def findsquares(image):
 
         norm = cv2.normalize(singlecomponent, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
         print 'showing single component %d' % i
-        cv2.imshow(wndname, norm)
-        #waitforescape()
+        #qimshow(norm)
 
         if len(contours) != 0:
             if len(contours) > 1:
@@ -295,8 +321,7 @@ def findsquares(image):
                 imagecutout = cv2.getRectSubPix(image, size, center)
 
                 print 'showing imagecutout'
-                cv2.imshow(wndname, singlecontour)
-                #waitforescape()
+                #qimshow(singlecontour)
 
                 try:
                     angle, topleft, size, square_bitmap = find_largest_overlapping_square(singlecontour, imagecutout)
@@ -309,23 +334,19 @@ def findsquares(image):
                 y = topleft[1]
                 frame = np.zeros(singlecontour.shape, np.uint8)
                 cv2.rectangle(frame, (x,y), (x + size, y + size), 255, 1)
-                cv2.imshow(wndname, frame)
-                #waitforescape()
+                #qimshow(frame)
 
                 rotation = cv2.getRotationMatrix2D( (frame.shape[0] / 2, frame.shape[1] / 2), angle, 1.0)
                 rotatedframe = cv2.warpAffine(frame, rotation, frame.shape)
-                cv2.imshow(wndname, rotatedframe)
-                #waitforescape()
+                #qimshow(rotatedframe)
 
                 print 'showing imagecutout'
-                cv2.imshow(wndname, imagecutout)
-                #waitforescape()
+                #qimshow(imagecutout)
 
                 rotatedframe = cv2.cvtColor( rotatedframe, cv2.COLOR_GRAY2BGR )
                 cutout_with_frame = cv2.addWeighted(imagecutout, 1.0, rotatedframe, 0.5, 0)
                 print 'showing imagecutout with frame'
-                cv2.imshow(wndname, cutout_with_frame)
-                waitforescape()
+                #qimshow(cutout_with_frame)
 
     return squares
 
@@ -337,14 +358,13 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
     newcenter = (singlecontour.shape[0] / 2, singlecontour.shape[1] / 2)
 
     print('imagecutout.shape', imagecutout.shape)
-    cv2.imshow(wndname, imagecutout)
+    #qimshow(imagecutout)
 
     for angle in xrange(-16,17):
         rotation = cv2.getRotationMatrix2D(newcenter, angle, 1.0)
         rotatedcontour = cv2.warpAffine(singlecontour, rotation, singlecontour.shape)
 
-        cv2.imshow(wndname, rotatedcontour)
-        #waitforescape()
+        #qimshow(rotatedcontour)
 
         offsetcontour = rotatedcontour.astype(np.float32) - 160
 
@@ -352,8 +372,7 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
             boxfiltered = cv2.boxFilter(offsetcontour, -1, (kernel_size, kernel_size), None, (0,0), False)
 
             norm = cv2.normalize(boxfiltered, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-            cv2.imshow(wndname, norm)
-            #waitforescape()
+            #qimshow(norm)
 
 
             mask = np.zeros(boxfiltered.shape, np.uint8)
@@ -361,7 +380,7 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
             minVal, maxVal, _, maxLoc = cv2.minMaxLoc(boxfiltered, mask)
 
-            print 'max is %s at angle %s and size %s' % (maxVal, angle, kernel_size)
+            #print 'max is %s at angle %s and size %s' % (maxVal, angle, kernel_size)
             if maxVal > overallMax:
                 overallMax = maxVal
                 overallMaxLoc = maxLoc
@@ -374,9 +393,8 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
         rotatedimagecutout = cv2.warpAffine(imagecutout, rotation, imagecutout.shape[0:2])
         bitmap = rotatedimagecutout[overallMaxLoc[0]:overallMaxLoc[0] + overallMaxKernelSize, overallMaxLoc[1]:overallMaxLoc[1] + overallMaxKernelSize]
 
-        print 'showing largest overlapping square'
-        cv2.imshow(wndname, bitmap)
-        #waitforescape()
+        print 'showing largest overlapping square with score %s' % overallMax
+        #qimshow(bitmap)
     else:
         raise NoMatchingSquareError()
 
@@ -384,15 +402,14 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
 
 if __name__ == "__main__":
-    cv2.namedWindow( wndname, 1 );
-    cv2.moveWindow(wndname, 100, 100);
+
+    app = QApplication(sys.argv)
 
     loadcalibrationdata()
     image = webcam.grab()
 
     print 'showing grabbed image'
-    cv2.imshow(wndname, image)
-    waitforescape()
+    #qimshow(image)
 
     correctedimage = common.correct_perspective(remove_color_cast(image), calibrationdata, False)
 
@@ -404,13 +421,18 @@ if __name__ == "__main__":
     # (consists of bitmaps for all known notes and last known state for each)
     scrumboard.load_state_from_file()
 
+    for note in scrumboard.tasknotes:
+        print 'Showing task note in state %s' % note.state
+        #qimshow(note.bitmap)
+
+
     # identify any squares on the board
     squares_in_photo = findsquares(correctedimage)
 
     # make a copy of the list of previously known task notes before we start adding new ones
     previously_known_tasknotes = copy.copy(scrumboard.tasknotes)
 
-    # take their bitmaps and compare them to the bitmaps of all task notes that we know of
+    # take the bitmaps of the squares in the photo and compare them to the bitmaps of all task notes that we know of
     matches_per_square = []
     for square in squares_in_photo:
         matching_tasknotes = []
@@ -422,11 +444,13 @@ if __name__ == "__main__":
     # for all matches found, determine which column they are in based on position and update their state
     # any remaining bitmaps are new ones, store the bitmap and the state
     for square, matches in zip(squares_in_photo, matches_per_square):
+
         if len(matches) > 1:
             raise RuntimeError('More than one task note matched a square')
         elif len(matches) == 1:
             newstate = scrumboard.get_state_from_position(square.position)
             matches[0].setstate(newstate)
+            qimshow([square.bitmap] + matches, 'Square with matching notes')
         else: # len(matches) == 0
             scrumboard.add_tasknote(square)
 

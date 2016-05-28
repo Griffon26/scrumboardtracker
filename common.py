@@ -16,6 +16,10 @@
 import cv2
 import numpy as np
 
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+
 NOTE_SIZE = 50
 
 def eucldistance(p1, p2):
@@ -45,3 +49,20 @@ def correct_perspective(image, calibrationdata, fixedscale):
     correctedimage = cv2.warpPerspective(image, transformation, (width, height))
 
     return correctedimage
+
+def cvimage_to_qpixmap(image):
+    if image.dtype == np.float32:
+        image = (image * 255).astype(np.uint8)
+
+    if len(image.shape) == 2:
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+    else:
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    height, width, channel = image_rgb.shape
+    qimage = QImage(image_rgb.data, width, height, width * 3, QImage.Format_RGB888)
+    qpixmap = QPixmap(qimage)
+
+    return qpixmap
+
+

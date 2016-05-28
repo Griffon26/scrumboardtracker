@@ -32,15 +32,6 @@ from PyQt5.QtWidgets import *
 
 calibrationdata = {}
 
-def cvimage_to_qpixmap(image_bgr):
-    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-
-    height, width, channel = image_rgb.shape
-    qimage = QImage(image_rgb.data, width, height, width * 3, QImage.Format_RGB888)
-    qpixmap = QPixmap(qimage)
-
-    return qpixmap
-
 class BoardSelectionLabel(QLabel):
     def __init__(self, image, points):
         QLabel.__init__(self, None)
@@ -92,7 +83,7 @@ class BoardSelectionLabel(QLabel):
 
     def redraw(self):
         image_with_corners = self.drawImageWithCorners(self.originalImage, self.draggablePoints)
-        pixmap = cvimage_to_qpixmap(image_with_corners)
+        pixmap = common.cvimage_to_qpixmap(image_with_corners)
 	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
         self.setPixmap(pixmap)
 
@@ -216,7 +207,7 @@ class LaneSelectionLabel(QLabel):
 
     def redraw(self):
         image_with_lines = self.drawImageWithLines(self.originalImage, self.linePositions, self.noteCorners)
-        pixmap = cvimage_to_qpixmap(image_with_lines)
+        pixmap = common.cvimage_to_qpixmap(image_with_lines)
 	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
         self.setPixmap(pixmap)
 
