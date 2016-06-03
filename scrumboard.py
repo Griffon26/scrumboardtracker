@@ -400,6 +400,16 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
     return -overallMaxAngle, overallMaxLoc, overallMaxKernelSize, bitmap
 
+def determine_average_colors(image):
+
+    diameter = int(common.NOTE_SIZE * 0.9)
+    circleKernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(diameter, diameter))
+
+    kernelSize = cv2.countNonZero(circleKernel)
+
+    averages = cv2.filter2D(image, -1, circleKernel.astype(np.float32) / kernelSize)
+    qimshow(averages)
+    return averages
 
 if __name__ == "__main__":
 
@@ -473,6 +483,8 @@ if __name__ == "__main__":
     # for any significant area of saturation that is not covered by
     # recognized squares, give a warning & highlight that it looks like a bunch of notes
     # TODO: find unused saturated areas
+
+    averages = determine_average_colors(correctedimage)
 
     scrumboard.save_state_to_file()
 
