@@ -116,7 +116,7 @@ def submatrix(bitmap_in, x, y, size):
     return bitmap_out
 
 def tilde(x):
-    return x - cv2.mean(x)
+    return x - cv2.mean(x)[0]
 
 def calculate_correlation(x, y, thresh_contrast, thresh_brightness):
     x = x.flatten()
@@ -129,7 +129,7 @@ def calculate_correlation(x, y, thresh_contrast, thresh_brightness):
     mean_corrected_x_squared = np.dot(mean_corrected_x, mean_corrected_x)
     contrast_correction_factor = mean_corrected_xy / mean_corrected_x_squared
 
-    brightness_correction_factor = cv2.mean(y) - contrast_correction_factor * cv2.mean(x)
+    brightness_correction_factor = cv2.mean(y)[0] - contrast_correction_factor * cv2.mean(x)[0]
 
     correlation_coef = (contrast_correction_factor * mean_corrected_x_squared) / (cv2.norm(mean_corrected_x) * cv2.norm(mean_corrected_y))
 
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     notesize = min(note.shape[:2])
 
     note_cropped = submatrix(note, note.shape[1] / 2, note.shape[0] / 2, notesize)
-    qimshow([note, note_cropped])
+    #qimshow([note, note_cropped])
 
     note = cv2.cvtColor(note_cropped, cv2.COLOR_BGR2GRAY)
     board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
@@ -164,10 +164,10 @@ if __name__ == "__main__":
     cifi_filtered = []
     cifi_board = []
     for i in range(0, nr_of_radii):
-        mask = np.zeros((notesize, notesize), dtype=note.dtype)
+        mask = np.zeros((notesize, notesize), dtype=np.uint8)
         cv2.circle(mask, (notesize / 2, notesize / 2), int((i * (notesize / 2.0)) / nr_of_radii), (255,255,255))
         cifi_masks.append(mask)
-        cifi_means.append(cv2.mean(note, mask))
+        cifi_means.append(cv2.mean(note, mask)[0])
 
         maskcount = cv2.countNonZero(mask)
 
@@ -179,20 +179,29 @@ if __name__ == "__main__":
 
     threshold1 = 0.95
     threshold2 = 0.95
+    thresh_contrast = 0.1
+    thresh_brightness = 1.0
 
-    '''
-    for x in enumerate(board.shape[1]):
-        for y in enumerate(board.shape[0]):
-            C_A = [ cifi_board[k][y][x] for k in range(nr_of_radii) ]
-            C_Q = cifi_means
-                
-            ciscorr = abs(calculate_correlation(C_A, C_Q))
-    '''
 
-    qimshow([ [note, board],
+    print 'Performing cifi'
+    matches = []
+    board2 = cv2.cvtColor(board, cv2.COLOR_GRAY2BGR)
+    ciscorr = np.zeros(board.shape, dtype=np.float32)
+    for x in range(board.shape[1]):
+        for y in range(board.shape[0]):
+            C_A = np.array([ cifi_board[k][y][x] for k in range(nr_of_radii) ])
+            C_Q = np.array(cifi_means)
+
+
+            ciscorr[y][x] = calculate_correlation(C_A, C_Q, thresh_contrast, thresh_brightness)
+            if ciscorr[y][x] > threshold1:
+                print '%s matches %s with probability %s' % (np.uint8(C_Q), C_A, ciscorr[y][x])
+                matches.extend([ C_Q, C_A, [0] * nr_of_radii ])
+                cv2.circle(board2, (x, y), 1, (255, 0, 255))
+
+    qimshow([ [note, board, ciscorr, board2],
+              [np.float32(matches)],
               cifi_masks,
               cifi_fmasks ]
               )
-    #for fb in filtered_board:
-    #    qimshow(fb)
 
