@@ -411,6 +411,13 @@ def determine_average_colors(image):
     qimshow(averages)
     return averages
 
+# The basic algorithm for updating the scrumboard state from an image is this:
+# - find all known notes on the board and update their states
+#   - not finding them is ok if previously in todo or in done
+#   - otherwise warn about missing note
+# - identify squares, filter out all at positions of recognized known notes
+# - add remaining squares as new notes, show new notes to user
+# - warn about significant areas with color (outside todo/done) not covered by notes
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
