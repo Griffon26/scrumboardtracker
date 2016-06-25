@@ -45,7 +45,7 @@ class ImageLabel(QLabel):
         self.setPixmap(pixmap)
 
 class ImageDialog(QDialog):
-    
+
     def __init__(self, images, text=None):
         super(ImageDialog, self).__init__()
 
@@ -138,9 +138,6 @@ def calculate_correlation(x, y, thresh_contrast, thresh_brightness):
 
     correlation_coef = (contrast_correction_factor * mean_corrected_x_squared) / (cv2.norm(mean_corrected_x) * cv2.norm(mean_corrected_y))
 
-    #print 'contrast_correction_factor', contrast_correction_factor
-    #print 'brightness_correction_factor', brightness_correction_factor
-
     if abs(contrast_correction_factor) <= thresh_contrast or \
        abs(contrast_correction_factor) >= 1.0 / thresh_contrast or \
        abs(brightness_correction_factor) > thresh_brightness:
@@ -159,15 +156,27 @@ def remove_gradient(note):
     note_without_gradient = note - gradient + background
 
     qimshow([ [note, gradient], [note_without_gradient, background] ])
-    
+
     return note_without_gradient
+
+def flatten_disc(img, center, radius):
+    values = []
+    for y in range(img.shape[0]):
+        for x in range(img.shape[1]):
+            diff_x = x - center[0]
+            diff_y = y - center[1]
+
+            if diff_x * diff_x + diff_y * diff_y < radius * radius:
+                values.append(img[y][x])
+
+    return np.array(values)
 
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
 
     note = cv2.imread('img3note.png', 1)
-    board = cv2.imread('../photos/downscaled/img1.jpg', 1)
+    board = cv2.imread('../photos/downscaled/img2.jpg', 1)
     notesize = min(note.shape[:2])
 
     note_cropped = submatrix(note, note.shape[1] / 2, note.shape[0] / 2, notesize)
@@ -178,6 +187,16 @@ if __name__ == "__main__":
     board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
 
     nr_of_radii = 13
+    min_nr_of_first_grade_candidates = 10
+    percentage_of_first_grade_candidates = 0.1
+    min_nr_of_second_grade_candidates = 10
+    percentage_of_second_grade_candidates = 1
+    thresh_contrast = 0.1
+    thresh_brightness = 255.0
+    threshold3 = 0.5
+
+
+    print 'Performing cifi'
 
     cifi_masks = []
     cifi_means = []
@@ -198,19 +217,8 @@ if __name__ == "__main__":
 
         cifi_board.append(cv2.filter2D(board, -1, fmask))
 
-    min_nr_of_first_grade_candidates = 10
-    percentage_of_first_grade_candidates = 0.1
-    min_nr_of_second_grade_candidates = 10
-    percentage_of_second_grade_candidates = 1
-    thresh_contrast = 0.1
-    thresh_brightness = 255.0
 
-    threshold3 = 0.5
-
-
-    print 'Performing cifi'
     candidates_with_correlation = []
-    ciscorr = np.zeros(board.shape, dtype=np.float32)
     board_with_markers = cv2.cvtColor(board, cv2.COLOR_GRAY2BGR)
 
     for x in range(board.shape[1]):
@@ -226,14 +234,13 @@ if __name__ == "__main__":
     if nr_of_first_grade_candidates < min_nr_of_first_grade_candidates:
         nr_of_first_grade_candidates = min(len(candidates_with_correlation), min_nr_of_first_grade_candidates)
     first_grade_candidates = sorted([ (x, y) for _, x, y in sorted(candidates_with_correlation, reverse=True)[:nr_of_first_grade_candidates] ])
-    
-    #first_grade_candidates = [(920, 845), (1186,638)]
+
     print 'first_grade_candidates: %s' % first_grade_candidates
 
     for x, y in first_grade_candidates:
         cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
 
-    qimshow([ [note, ciscorr, board_with_markers],
+    qimshow([ [note, board_with_markers],
               cifi_masks,
               cifi_fmasks ]
               )
@@ -283,10 +290,7 @@ if __name__ == "__main__":
         for cshift in range(nr_of_rotation_angles):
             rotated_rafi_means = np.roll(rafi_means, cshift)
 
-            #print 'this means:', this_candidate_means
-            #print 'rotatedraf:', rotated_rafi_means
             rascorr = calculate_correlation(np.array(this_candidate_means), rotated_rafi_means, thresh_contrast, thresh_brightness)
-            #print 'rascorr for cshift %d is %f' % (cshift, rascorr)
 
             this_candidate_rascorrs.append(rascorr)
 
@@ -294,8 +298,6 @@ if __name__ == "__main__":
                 max_rascorr = rascorr
                 max_cshift = cshift
 
-
-        
         candidates_with_correlation.append( (max_rascorr, x, y, max_cshift) )
 
     nr_of_second_grade_candidates = int((len(candidates_with_correlation) * percentage_of_second_grade_candidates) / 100)
@@ -313,18 +315,6 @@ if __name__ == "__main__":
 
     print 'Performing tefi'
 
-    def flatten_disc(img, center, radius):
-        values = []
-        for y in range(img.shape[0]):
-            for x in range(img.shape[1]):
-                diff_x = x - center[0]
-                diff_y = y - center[1]
-
-                if diff_x * diff_x + diff_y * diff_y < radius * radius:
-                    values.append(img[y][x])
-
-        return np.array(values)
-   
     rotated_templates = []
     for cshift in range(nr_of_rotation_angles):
         rotation_matrix = cv2.getRotationMatrix2D((notesize / 2, notesize / 2), -cshift * 10, 1)
