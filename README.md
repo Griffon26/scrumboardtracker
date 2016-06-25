@@ -11,7 +11,7 @@ overdue tasks for instance.
 # How does it work
 
 1. After the camera has been mounted in a fixed position the calibration script is run to select the
-   outlines of the board in the frame, the location of the columns (TODO, BUSY, etc), the size of a
+   outlines of the board in the frame, the location of the columns (TODO, IN PROGRESS, etc), the size of a
    note and a spot on the board for detecting the board color
    If a projector is installed, it is also calibrated at this time.
 2. at the start of a sprint all task notes are put in the TODO column on the scrum board such that
