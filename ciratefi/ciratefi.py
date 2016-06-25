@@ -150,16 +150,29 @@ def calculate_correlation(x, y, thresh_contrast, thresh_brightness):
 
     return correlation
 
+def remove_gradient(note):
+    means = cv2.mean(note)
+    background = np.zeros(note.shape, dtype=note.dtype)
+    background[:] = (int(means[0]), int(means[1]), int(means[2]))
+    gradient = cv2.GaussianBlur(note, (notesize - 1, notesize - 1), 0)
+
+    note_without_gradient = note - gradient + background
+
+    qimshow([ [note, gradient], [note_without_gradient, background] ])
+    
+    return note_without_gradient
+
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
 
-    note = cv2.imread('note.png', 1)
-    board = cv2.imread('img5.jpg', 1)
+    note = cv2.imread('img3note.png', 1)
+    board = cv2.imread('../photos/downscaled/img1.jpg', 1)
     notesize = min(note.shape[:2])
 
     note_cropped = submatrix(note, note.shape[1] / 2, note.shape[0] / 2, notesize)
-    #qimshow([note, note_cropped])
+
+    note_cropped = remove_gradient(note_cropped)
 
     note = cv2.cvtColor(note_cropped, cv2.COLOR_BGR2GRAY)
     board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
@@ -185,18 +198,20 @@ if __name__ == "__main__":
 
         cifi_board.append(cv2.filter2D(board, -1, fmask))
 
-    threshold1 = 0.97
-    threshold2 = 0.6
+    min_nr_of_first_grade_candidates = 10
+    percentage_of_first_grade_candidates = 0.1
+    min_nr_of_second_grade_candidates = 10
+    percentage_of_second_grade_candidates = 1
     thresh_contrast = 0.1
     thresh_brightness = 255.0
 
+    threshold3 = 0.5
+
 
     print 'Performing cifi'
-    matches = []
-    first_grade_candidates = []
+    candidates_with_correlation = []
     ciscorr = np.zeros(board.shape, dtype=np.float32)
-    board = cv2.cvtColor(board, cv2.COLOR_GRAY2BGR)
-    board_with_markers = board.copy()
+    board_with_markers = cv2.cvtColor(board, cv2.COLOR_GRAY2BGR)
 
     for x in range(board.shape[1]):
         for y in range(board.shape[0]):
@@ -204,20 +219,24 @@ if __name__ == "__main__":
             C_Q = np.array(cifi_means)
 
 
-            ciscorr[y][x] = calculate_correlation(C_Q, C_A, thresh_contrast, thresh_brightness)
-            if ciscorr[y][x] > threshold1:
-                print '%s matches %s with probability %s' % (np.uint8(C_Q), C_A, ciscorr[y][x])
-                matches.extend([ C_Q, C_A, [0] * nr_of_radii ])
-                cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
-                first_grade_candidates.append( (x, y) )
+            correlation = calculate_correlation(C_Q, C_A, thresh_contrast, thresh_brightness)
+            candidates_with_correlation.append( (correlation, x, y) )
+
+    nr_of_first_grade_candidates = int((len(candidates_with_correlation) * percentage_of_first_grade_candidates) / 100)
+    if nr_of_first_grade_candidates < min_nr_of_first_grade_candidates:
+        nr_of_first_grade_candidates = min(len(candidates_with_correlation), min_nr_of_first_grade_candidates)
+    first_grade_candidates = sorted([ (x, y) for _, x, y in sorted(candidates_with_correlation, reverse=True)[:nr_of_first_grade_candidates] ])
+    
+    #first_grade_candidates = [(920, 845), (1186,638)]
+    print 'first_grade_candidates: %s' % first_grade_candidates
+
+    for x, y in first_grade_candidates:
+        cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
 
     qimshow([ [note, ciscorr, board_with_markers],
               cifi_masks,
               cifi_fmasks ]
               )
-
-    #first_grade_candidates = [(408, 234), (409, 239), (412, 246)]
-    print 'first_grade_candidates: %s' % first_grade_candidates
 
     print 'Performing rafi'
 
@@ -252,8 +271,10 @@ if __name__ == "__main__":
         #print 'means for candidate at (%d, %d) are %s' % (x, y, [int(x) for x in this_candidate_means])
         candidate_means.append(this_candidate_means)
 
-    second_grade_candidates = []
+    candidates_with_correlation = []
     for i, this_candidate_means in enumerate(candidate_means):
+        x, y = first_grade_candidates[i]
+
         this_candidate_rascorrs = []
 
         max_rascorr = -2
@@ -273,14 +294,72 @@ if __name__ == "__main__":
                 max_rascorr = rascorr
                 max_cshift = cshift
 
-        #print 'best rotation for candidate %d at %d,%d is %d with rascorr %f' % (i, first_grade_candidates[i][0],
-        #                                                            first_grade_candidates[i][1], max_cshift * 10, max_rascorr)
-        if max_rascorr >= threshold2:
-            print 'upgrading candidate at %d,%d with rascorr %f and best rotation %d to second grade candidate' % \
-                (first_grade_candidates[i][0], first_grade_candidates[i][1], max_rascorr, max_cshift * (360 / nr_of_rotation_angles))
-            second_grade_candidates.append(first_grade_candidates[i])
-            cv2.circle(board_with_markers, first_grade_candidates[i], 1, (255, 0, 0))
+
+        
+        candidates_with_correlation.append( (max_rascorr, x, y, max_cshift) )
+
+    nr_of_second_grade_candidates = int((len(candidates_with_correlation) * percentage_of_second_grade_candidates) / 100)
+    if nr_of_second_grade_candidates < min_nr_of_second_grade_candidates:
+        nr_of_second_grade_candidates = min(len(candidates_with_correlation), min_nr_of_second_grade_candidates)
+    second_grade_candidates = sorted([ (x, y, cshift) for _, x, y, cshift in
+                                       sorted(candidates_with_correlation, reverse=True)[:nr_of_second_grade_candidates] ])
+
+    for x, y, cshift in second_grade_candidates:
+        print 'best rotation for second grade candidate at %d,%d is %d' % (x, y, cshift * 10)
+        cv2.circle(board_with_markers, (x, y), 3, (255, 0, 0))
+        cv2.circle(board_with_markers, (x, y), 4, (255, 0, 0))
 
     qimshow([board_with_markers])
+
+    print 'Performing tefi'
+
+    def flatten_disc(img, center, radius):
+        values = []
+        for y in range(img.shape[0]):
+            for x in range(img.shape[1]):
+                diff_x = x - center[0]
+                diff_y = y - center[1]
+
+                if diff_x * diff_x + diff_y * diff_y < radius * radius:
+                    values.append(img[y][x])
+
+        return np.array(values)
+   
+    rotated_templates = []
+    for cshift in range(nr_of_rotation_angles):
+        rotation_matrix = cv2.getRotationMatrix2D((notesize / 2, notesize / 2), -cshift * 10, 1)
+        rotated_note = cv2.warpAffine(note, rotation_matrix, (notesize, notesize))
+        masked_rotated_note = flatten_disc(rotated_note, (notesize / 2, notesize / 2), notesize / 2)
+        rotated_templates.append(masked_rotated_note)
+
+    candidates_with_correlation = []
+    for x, y, cshift in second_grade_candidates:
+        for x2 in [x - 1, x, x + 1]:
+            for y2 in [y - 1, y, y + 1]:
+                possible_match = submatrix(board, x2, y2, notesize)
+                masked_possible_match = flatten_disc(possible_match, (notesize / 2, notesize / 2), notesize / 2)
+                corr = calculate_correlation(rotated_templates[cshift], masked_possible_match, thresh_contrast, thresh_brightness)
+                #print 'correlation with second grade candidate at (%d,%d) is %f' % (x2, y2, corr)
+                candidates_with_correlation.append( (corr, x2, y2) )
+
+    candidates_with_correlation.sort(reverse = True)
+
+    final_match = candidates_with_correlation[0]
+
+    if final_match[0] < threshold3:
+        print 'no match was found. The best was at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
+        qimshow(submatrix(board, final_match[1], final_match[2], notesize))
+    else:
+        print 'final match is at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
+        qimshow(submatrix(board, final_match[1], final_match[2], notesize))
+        for corr, x, y in candidates_with_correlation:
+            diff_x = x - final_match[1]
+            diff_y = y - final_match[2]
+            if diff_x * diff_x + diff_y * diff_y > notesize * notesize:
+                print 'second best match is at (%d,%d) with correlation %f' % (x, y, corr)
+                qimshow(submatrix(board, x, y, notesize))
+                break
+
+
 
 
