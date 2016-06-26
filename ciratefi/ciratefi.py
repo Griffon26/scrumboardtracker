@@ -147,44 +147,51 @@ def calculate_correlation(x, y, thresh_contrast, thresh_brightness):
 
     return correlation
 
-def calculate_image_correlation(stack_of_x, stack_of_y, thresh_contrast, thresh_brightness):
+def calculate_parameters_from_list(list_of_x):
+    mean_x = np.mean(list_of_x, dtype=np.float32)
 
-    weight = 1.0 / len(stack_of_x)
-    dtype = stack_of_x[0].dtype
+    mean_corrected_x = list_of_x - mean_x
 
-    xshape = stack_of_x[0].shape
+    mean_corrected_x_squared = np.dot(mean_corrected_x, mean_corrected_x)
+
+    mean_corrected_x_norm = math.sqrt(mean_corrected_x_squared)
+
+    return mean_x, mean_corrected_x, mean_corrected_x_squared, mean_corrected_x_norm
+
+def calculate_parameters_from_mat(stack_of_y):
+    weight = 1.0 / len(stack_of_y)
     yshape = stack_of_y[0].shape
 
-    mean_x = np.zeros(xshape, dtype=dtype)
-    for x in stack_of_x:
-        mean_x = cv2.addWeighted(mean_x, 1.0, x, weight, 0)
-
-    mean_y = np.zeros(yshape, dtype=dtype)
+    mean_y = np.zeros(yshape, dtype=np.float32)
     for y in stack_of_y:
         mean_y = cv2.addWeighted(mean_y, 1.0, y, weight, 0)
 
-    mean_corrected_x = [x - mean_x for x in stack_of_x]
     mean_corrected_y = [y - mean_y for y in stack_of_y]
-
-    element_wise_xy = [np.float32(x) * y for x, y in zip(mean_corrected_x, mean_corrected_y)]
-    mean_corrected_xy = np.zeros(yshape, dtype=np.float32)
-    for xy in element_wise_xy:
-        mean_corrected_xy = cv2.add(mean_corrected_xy, xy)
-
-    element_wise_x_squared = [np.float32(x) * x for x in mean_corrected_x]
-    mean_corrected_x_squared = np.zeros(xshape, dtype=np.float32)
-    for x_squared in element_wise_x_squared:
-        mean_corrected_x_squared = cv2.add(mean_corrected_x_squared, x_squared)
-
-    contrast_correction_factor = mean_corrected_xy / mean_corrected_x_squared
-
-    brightness_correction_factor = mean_y - contrast_correction_factor * mean_x
 
     element_wise_y_squared = [np.float32(y) * y for y in mean_corrected_y]
     mean_corrected_y_squared = np.zeros(yshape, dtype=np.float32)
     for y_squared in element_wise_y_squared:
         mean_corrected_y_squared = cv2.add(mean_corrected_y_squared, y_squared)
-    correlation_coef = (contrast_correction_factor * mean_corrected_x_squared) / (cv2.sqrt(mean_corrected_x_squared) * cv2.sqrt(mean_corrected_y_squared))
+
+    mean_corrected_y_norm = cv2.sqrt(mean_corrected_y_squared)
+
+    return mean_y, mean_corrected_y, mean_corrected_y_squared, mean_corrected_y_norm
+
+def calculate_image_correlation(stack_of_x, stack_of_y, thresh_contrast, thresh_brightness):
+
+    mean_x, mean_corrected_x, mean_corrected_x_squared, mean_corrected_x_norm = calculate_parameters_from_list(stack_of_x)
+    mean_y, mean_corrected_y, mean_corrected_y_squared, mean_corrected_y_norm = calculate_parameters_from_mat(stack_of_y)
+
+    element_wise_xy = [np.float32(y) * x for x, y in zip(mean_corrected_x, mean_corrected_y)]
+    mean_corrected_xy = np.zeros(mean_y.shape, dtype=np.float32)
+    for xy in element_wise_xy:
+        mean_corrected_xy = cv2.add(mean_corrected_xy, xy)
+
+    contrast_correction_factor = mean_corrected_xy / mean_corrected_x_squared
+
+    brightness_correction_factor = mean_y - contrast_correction_factor * mean_x
+
+    correlation_coef = (contrast_correction_factor * mean_corrected_x_squared) / (mean_corrected_x_norm * mean_corrected_y_norm)
 
     low_contrast_indices = abs(contrast_correction_factor) <= thresh_contrast
     high_contrast_indices = abs(contrast_correction_factor) >= (1.0 / thresh_contrast)
@@ -274,11 +281,7 @@ if __name__ == "__main__":
     board_with_markers = cv2.cvtColor(board, cv2.COLOR_GRAY2BGR)
 
     C_A = [ np.float32(cifi_board[k]) for k in range(nr_of_radii) ]
-    C_Q = []
-    for k in range(nr_of_radii):
-        q = np.zeros(board.shape, dtype=np.float32)
-        q[:] = cifi_means[k]
-        C_Q.append(q)
+    C_Q = np.array(cifi_means)
 
     correlation = calculate_image_correlation(C_Q, C_A, thresh_contrast, thresh_brightness)
 
@@ -298,10 +301,10 @@ if __name__ == "__main__":
     for x, y in first_grade_candidates:
         cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
 
-    qimshow([ [note, board_with_markers],
-              cifi_masks,
-              cifi_fmasks ]
-              )
+    #qimshow([ [note, board_with_markers],
+    #          cifi_masks,
+    #          cifi_fmasks ]
+    #          )
 
     print 'Performing rafi'
 
