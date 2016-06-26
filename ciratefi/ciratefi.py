@@ -147,6 +147,58 @@ def calculate_correlation(x, y, thresh_contrast, thresh_brightness):
 
     return correlation
 
+def calculate_image_correlation(stack_of_x, stack_of_y, thresh_contrast, thresh_brightness):
+
+    weight = 1.0 / len(stack_of_x)
+    dtype = stack_of_x[0].dtype
+
+    xshape = stack_of_x[0].shape
+    yshape = stack_of_y[0].shape
+
+    mean_x = np.zeros(xshape, dtype=dtype)
+    for x in stack_of_x:
+        mean_x = cv2.addWeighted(mean_x, 1.0, x, weight, 0)
+
+    mean_y = np.zeros(yshape, dtype=dtype)
+    for y in stack_of_y:
+        mean_y = cv2.addWeighted(mean_y, 1.0, y, weight, 0)
+
+    mean_corrected_x = [x - mean_x for x in stack_of_x]
+    mean_corrected_y = [y - mean_y for y in stack_of_y]
+
+    element_wise_xy = [np.float32(x) * y for x, y in zip(mean_corrected_x, mean_corrected_y)]
+    mean_corrected_xy = np.zeros(yshape, dtype=np.float32)
+    for xy in element_wise_xy:
+        mean_corrected_xy = cv2.add(mean_corrected_xy, xy)
+
+    element_wise_x_squared = [np.float32(x) * x for x in mean_corrected_x]
+    mean_corrected_x_squared = np.zeros(xshape, dtype=np.float32)
+    for x_squared in element_wise_x_squared:
+        mean_corrected_x_squared = cv2.add(mean_corrected_x_squared, x_squared)
+
+    contrast_correction_factor = mean_corrected_xy / mean_corrected_x_squared
+
+    brightness_correction_factor = mean_y - contrast_correction_factor * mean_x
+
+    element_wise_y_squared = [np.float32(y) * y for y in mean_corrected_y]
+    mean_corrected_y_squared = np.zeros(yshape, dtype=np.float32)
+    for y_squared in element_wise_y_squared:
+        mean_corrected_y_squared = cv2.add(mean_corrected_y_squared, y_squared)
+    correlation_coef = (contrast_correction_factor * mean_corrected_x_squared) / (cv2.sqrt(mean_corrected_x_squared) * cv2.sqrt(mean_corrected_y_squared))
+
+    low_contrast_indices = abs(contrast_correction_factor) <= thresh_contrast
+    high_contrast_indices = abs(contrast_correction_factor) >= (1.0 / thresh_contrast)
+    high_brightness_indices = abs(brightness_correction_factor) > thresh_brightness
+
+    correlation_coef[low_contrast_indices] = 0
+    correlation_coef[high_contrast_indices] = 0
+    correlation_coef[high_brightness_indices] = 0
+
+    print correlation_coef.shape
+
+    return correlation_coef
+
+
 def remove_gradient(note):
     means = cv2.mean(note)
     background = np.zeros(note.shape, dtype=note.dtype)
@@ -221,19 +273,25 @@ if __name__ == "__main__":
     candidates_with_correlation = []
     board_with_markers = cv2.cvtColor(board, cv2.COLOR_GRAY2BGR)
 
-    for x in range(board.shape[1]):
-        for y in range(board.shape[0]):
-            C_A = np.array([ cifi_board[k][y][x] for k in range(nr_of_radii) ])
-            C_Q = np.array(cifi_means)
+    C_A = [ np.float32(cifi_board[k]) for k in range(nr_of_radii) ]
+    C_Q = []
+    for k in range(nr_of_radii):
+        q = np.zeros(board.shape, dtype=np.float32)
+        q[:] = cifi_means[k]
+        C_Q.append(q)
 
+    correlation = calculate_image_correlation(C_Q, C_A, thresh_contrast, thresh_brightness)
 
-            correlation = calculate_correlation(C_Q, C_A, thresh_contrast, thresh_brightness)
-            candidates_with_correlation.append( (correlation, x, y) )
-
-    nr_of_first_grade_candidates = int((len(candidates_with_correlation) * percentage_of_first_grade_candidates) / 100)
+    nr_of_candidates = cv2.countNonZero(correlation)
+    nr_of_first_grade_candidates = int((nr_of_candidates * percentage_of_first_grade_candidates) / 100)
     if nr_of_first_grade_candidates < min_nr_of_first_grade_candidates:
-        nr_of_first_grade_candidates = min(len(candidates_with_correlation), min_nr_of_first_grade_candidates)
-    first_grade_candidates = sorted([ (x, y) for _, x, y in sorted(candidates_with_correlation, reverse=True)[:nr_of_first_grade_candidates] ])
+        nr_of_first_grade_candidates = min(nr_of_candidates, min_nr_of_first_grade_candidates)
+
+    sorted_indices = np.argsort(correlation, None)[-nr_of_first_grade_candidates:]
+    sorted_indexpairs = np.unravel_index(sorted_indices, correlation.shape)
+
+    first_grade_candidates = sorted([ (x, y) for y, x in zip(*sorted_indexpairs) ])
+
 
     print 'first_grade_candidates: %s' % first_grade_candidates
 
