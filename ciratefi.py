@@ -24,48 +24,9 @@ import numpy as np
 import os
 import sys
 
-sys.path.append('..')
-
-from common import qimshow
+import common
 
 from PyQt5 import QtWidgets
-
-# Determines the start and end of source and destination ranges for copying
-# 'dest_size' pixels out of a range of 'source_size' pixels starting at offset
-# 'offset'. The ranges given by this function can be used to copy a submatrix
-# from a larger matrix without reading outside the source matrix or writing
-# outside the destination matrix.
-def determine_copy_ranges(offset, source_size, dest_size):
-
-    dest_start = 0
-    dest_end = dest_size
-
-    src_start = offset
-    src_end = offset + dest_size
-
-    if src_start < 0:
-        dest_start += -src_start
-        src_start = 0
-    if src_end > source_size:
-        dest_end -= src_end - source_size
-        src_end = source_size
-
-    return src_start, src_end, dest_start, dest_end
-
-def submatrix(bitmap_in, x, y, size):
-
-    shape = [size, size]
-    if len(bitmap_in.shape) == 3:
-        shape.append(bitmap_in.shape[2])
-    bitmap_out = np.zeros(shape, dtype=bitmap_in.dtype)
-
-    src_row_start, src_row_end, dest_row_start, dest_row_end = determine_copy_ranges(y - size / 2, bitmap_in.shape[0], size)
-    src_col_start, src_col_end, dest_col_start, dest_col_end = determine_copy_ranges(x - size / 2, bitmap_in.shape[1], size)
-
-    bitmap_out[dest_row_start:dest_row_end,
-               dest_col_start:dest_col_end] = bitmap_in[src_row_start:src_row_end,
-                                                        src_col_start:src_col_end]
-    return bitmap_out
 
 def tilde(x):
     return x - cv2.mean(x)[0]
@@ -159,7 +120,7 @@ def remove_gradient(note):
 
     note_without_gradient = note - gradient + background
 
-    qimshow([ [note, gradient], [note_without_gradient, background] ])
+    common.qimshow([ [note, gradient], [note_without_gradient, background] ])
 
     return note_without_gradient
 
@@ -258,7 +219,7 @@ class Ciratefi:
 
         candidate_means = []
         for x, y in first_grade_candidates:
-            candidate = submatrix(self.board, x, y, self.notesize)
+            candidate = common.submatrix(self.board, x, y, self.notesize)
             this_candidate_means = []
             for mask in rafi_masks:
                 this_candidate_means.append(cv2.mean(candidate, mask)[0])
@@ -311,7 +272,7 @@ class Ciratefi:
         for x, y, cshift in second_grade_candidates:
             for x2 in [x - 1, x, x + 1]:
                 for y2 in [y - 1, y, y + 1]:
-                    possible_match = submatrix(self.board, x2, y2, self.notesize)
+                    possible_match = common.submatrix(self.board, x2, y2, self.notesize)
                     masked_possible_match = flatten_disc(possible_match, (self.notesize / 2, self.notesize / 2), self.notesize / 2)
                     corr = calculate_correlation(rotated_templates[cshift],
                                                  masked_possible_match,
@@ -327,18 +288,18 @@ class Ciratefi:
         if final_match[0] < self.settings['thresh_confidence']:
             if self.debug:
                 print 'no match was found. The best was at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
-                qimshow(submatrix(self.board, final_match[1], final_match[2], self.notesize))
+                common.qimshow(common.submatrix(self.board, final_match[1], final_match[2], self.notesize))
             return None
         else:
             if self.debug:
                 print 'final match is at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
-                qimshow(submatrix(self.board, final_match[1], final_match[2], self.notesize))
+                common.qimshow(common.submatrix(self.board, final_match[1], final_match[2], self.notesize))
                 for corr, x, y in candidates_with_correlation:
                     diff_x = x - final_match[1]
                     diff_y = y - final_match[2]
                     if diff_x * diff_x + diff_y * diff_y > self.notesize * self.notesize:
                         print 'second best match is at (%d,%d) with correlation %f' % (x, y, corr)
-                        qimshow(submatrix(self.board, x, y, self.notesize))
+                        common.qimshow(common.submatrix(self.board, x, y, self.notesize))
                         break
 
             return final_match
@@ -352,7 +313,7 @@ class Ciratefi:
             cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
 
         if self.debug:
-            qimshow(board_with_markers)
+            common.qimshow(board_with_markers)
 
         second_grade_candidates = self._rafi(note, first_grade_candidates)
         for x, y, cshift in second_grade_candidates:
@@ -361,38 +322,9 @@ class Ciratefi:
             cv2.circle(board_with_markers, (x, y), 4, (255, 0, 0))
 
         if self.debug:
-            qimshow(board_with_markers)
+            common.qimshow(board_with_markers)
 
         final_match = self._tefi(note, second_grade_candidates)
 
-        return final_match
-
-
-def find_notes_on_board(notes, board):
-
-    ciratefi = Ciratefi(board, notes[0].shape[0], debug=False)
-
-    for i, note in enumerate(notes):
-        match = ciratefi.find(note)
-
-        if match:
-            print 'final match found for note %d at %s' % (i, match)
-        else:
-            print 'no match found for note %d' % i
-
-
-
-if __name__ == "__main__":
-
-    app = QtWidgets.QApplication(sys.argv)
-
-    note = cv2.imread('img3note.png', 1)
-    board = cv2.imread('../photos/downscaled/img2.jpg', 1)
-    notesize = min(note.shape[:2])
-
-    note_cropped = submatrix(note, note.shape[1] / 2, note.shape[0] / 2, notesize)
-    note_cropped = remove_gradient(note_cropped)
-
-    find_notes_on_board([note_cropped], board)
-
+        return final_match[1:]
 

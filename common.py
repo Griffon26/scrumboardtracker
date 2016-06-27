@@ -22,6 +22,43 @@ from PyQt5.QtWidgets import *
 
 NOTE_SIZE = 50
 
+# Determines the start and end of source and destination ranges for copying
+# 'dest_size' pixels out of a range of 'source_size' pixels starting at offset
+# 'offset'. The ranges given by this function can be used to copy a submatrix
+# from a larger matrix without reading outside the source matrix or writing
+# outside the destination matrix.
+def determine_copy_ranges(offset, source_size, dest_size):
+
+    dest_start = 0
+    dest_end = dest_size
+
+    src_start = offset
+    src_end = offset + dest_size
+
+    if src_start < 0:
+        dest_start += -src_start
+        src_start = 0
+    if src_end > source_size:
+        dest_end -= src_end - source_size
+        src_end = source_size
+
+    return src_start, src_end, dest_start, dest_end
+
+def submatrix(bitmap_in, x, y, size):
+
+    shape = [size, size]
+    if len(bitmap_in.shape) == 3:
+        shape.append(bitmap_in.shape[2])
+    bitmap_out = np.zeros(shape, dtype=bitmap_in.dtype)
+
+    src_row_start, src_row_end, dest_row_start, dest_row_end = determine_copy_ranges(y - size / 2, bitmap_in.shape[0], size)
+    src_col_start, src_col_end, dest_col_start, dest_col_end = determine_copy_ranges(x - size / 2, bitmap_in.shape[1], size)
+
+    bitmap_out[dest_row_start:dest_row_end,
+               dest_col_start:dest_col_end] = bitmap_in[src_row_start:src_row_end,
+                                                        src_col_start:src_col_end]
+    return bitmap_out
+
 def eucldistance(p1, p2):
     return cv2.norm(np.array(p1) - np.array(p2))
 

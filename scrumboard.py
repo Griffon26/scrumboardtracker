@@ -44,6 +44,7 @@ import numpy as np
 import os
 import sys
 
+from ciratefi import Ciratefi
 import common
 from common import qimshow
 import webcam
@@ -390,10 +391,18 @@ if __name__ == "__main__":
     # (consists of bitmaps for all known notes and last known state for each)
     scrumboard.load_state_from_file()
 
-    for note in scrumboard.tasknotes:
-        print 'Showing task note in state %s' % note.state
-        #qimshow(note.bitmap)
+    ciratefi = Ciratefi(correctedimage, common.NOTE_SIZE, debug=True)
 
+    for note in scrumboard.tasknotes:
+        print 'Searching for task note in state %s' % note.state
+        qimshow(note.bitmap, 'Searching for task note in state %s' % note.state)
+        match = ciratefi.find(note.bitmap)
+
+        if match:
+            print 'Task note found at (%d,%d)' % match
+            qimshow(common.submatrix(correctedimage, match[0], match[1], common.NOTE_SIZE), 'Task note found at (%d,%d)' % match)
+        else:
+            print 'Task note not found'
 
     # identify any squares on the board
     squares_in_photo = findsquares(correctedimage)
