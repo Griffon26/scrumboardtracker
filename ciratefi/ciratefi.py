@@ -148,8 +148,6 @@ def calculate_image_correlation(stack_of_x, stack_of_y, thresh_contrast, thresh_
     correlation_coef[high_contrast_indices] = 0
     correlation_coef[high_brightness_indices] = 0
 
-    print correlation_coef.shape
-
     return correlation_coef
 
 
@@ -179,7 +177,7 @@ def flatten_disc(img, center, radius):
 
 class Ciratefi:
 
-    def __init__(self, board, notesize, settings = {}):
+    def __init__(self, board, notesize, settings = {}, debug=False):
         self.settings = {
             'nr_of_radii' : 13,
             'nr_of_rotation_angles' : 36,
@@ -193,7 +191,8 @@ class Ciratefi:
         }
         self.settings.update(settings)
         self.notesize = notesize
-        self.board = board.copy()
+        self.board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
+        self.debug = debug
 
         print 'Performing cifi on the board'
         self.cifi_masks = []
@@ -208,9 +207,9 @@ class Ciratefi:
             fmask = np.float32(mask) / 255
             fmask = fmask / maskcount
 
-            self.cifi_board.append(cv2.filter2D(board, -1, fmask))
+            self.cifi_board.append(cv2.filter2D(self.board, -1, fmask))
 
-    def cifi(self, note):
+    def _cifi(self, note):
         print 'Performing cifi'
         cifi_means = []
         for i in range(0, self.settings['nr_of_radii']):
@@ -236,7 +235,7 @@ class Ciratefi:
 
         return first_grade_candidates
 
-    def rafi(self, note, first_grade_candidates):
+    def _rafi(self, note, first_grade_candidates):
         print 'Performing rafi'
 
         rafi_masks = []
@@ -260,7 +259,6 @@ class Ciratefi:
         candidate_means = []
         for x, y in first_grade_candidates:
             candidate = submatrix(self.board, x, y, self.notesize)
-            #qimshow(candidate)
             this_candidate_means = []
             for mask in rafi_masks:
                 this_candidate_means.append(cv2.mean(candidate, mask)[0])
@@ -299,7 +297,7 @@ class Ciratefi:
 
         return second_grade_candidates
 
-    def tefi(self, note, second_grade_candidates):
+    def _tefi(self, note, second_grade_candidates):
         print 'Performing tefi'
 
         rotated_templates = []
@@ -327,56 +325,61 @@ class Ciratefi:
         final_match = candidates_with_correlation[0]
 
         if final_match[0] < self.settings['thresh_confidence']:
-            print 'no match was found. The best was at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
-            qimshow(submatrix(self.board, final_match[1], final_match[2], self.notesize))
+            if self.debug:
+                print 'no match was found. The best was at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
+                qimshow(submatrix(self.board, final_match[1], final_match[2], self.notesize))
             return None
         else:
-            print 'final match is at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
-            qimshow(submatrix(self.board, final_match[1], final_match[2], self.notesize))
-            for corr, x, y in candidates_with_correlation:
-                diff_x = x - final_match[1]
-                diff_y = y - final_match[2]
-                if diff_x * diff_x + diff_y * diff_y > self.notesize * self.notesize:
-                    print 'second best match is at (%d,%d) with correlation %f' % (x, y, corr)
-                    #qimshow(submatrix(self.board, x, y, self.notesize))
-                    break
+            if self.debug:
+                print 'final match is at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
+                qimshow(submatrix(self.board, final_match[1], final_match[2], self.notesize))
+                for corr, x, y in candidates_with_correlation:
+                    diff_x = x - final_match[1]
+                    diff_y = y - final_match[2]
+                    if diff_x * diff_x + diff_y * diff_y > self.notesize * self.notesize:
+                        print 'second best match is at (%d,%d) with correlation %f' % (x, y, corr)
+                        qimshow(submatrix(self.board, x, y, self.notesize))
+                        break
 
             return final_match
 
-def find_notes_on_board(notes, board):
-
-    board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
-    board_with_markers = cv2.cvtColor(board, cv2.COLOR_GRAY2BGR)
-
-    ciratefi = Ciratefi(board, notes[0].shape[0])
-
-    for i, note in enumerate(notes):
+    def find(self, note):
+        board_with_markers = cv2.cvtColor(self.board, cv2.COLOR_GRAY2BGR)
         note = cv2.cvtColor(note, cv2.COLOR_BGR2GRAY)
 
-        first_grade_candidates = ciratefi.cifi(note)
-
+        first_grade_candidates = self._cifi(note)
         for x, y in first_grade_candidates:
             cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
 
-        qimshow(board_with_markers)
+        if self.debug:
+            qimshow(board_with_markers)
 
-
-        second_grade_candidates = ciratefi.rafi(note, first_grade_candidates)
-
+        second_grade_candidates = self._rafi(note, first_grade_candidates)
         for x, y, cshift in second_grade_candidates:
-            print 'best rotation for second grade candidate at %d,%d is %d' % (x, y, cshift * 10)
+            #print 'best rotation for second grade candidate at %d,%d is %d' % (x, y, cshift * 10)
             cv2.circle(board_with_markers, (x, y), 3, (255, 0, 0))
             cv2.circle(board_with_markers, (x, y), 4, (255, 0, 0))
 
-        qimshow(board_with_markers)
+        if self.debug:
+            qimshow(board_with_markers)
+
+        final_match = self._tefi(note, second_grade_candidates)
+
+        return final_match
 
 
-        final_match = ciratefi.tefi(note, second_grade_candidates)
+def find_notes_on_board(notes, board):
 
-        if final_match:
-            print 'final match found for note %d at %s' % (i, final_match)
+    ciratefi = Ciratefi(board, notes[0].shape[0], debug=False)
+
+    for i, note in enumerate(notes):
+        match = ciratefi.find(note)
+
+        if match:
+            print 'final match found for note %d at %s' % (i, match)
         else:
             print 'no match found for note %d' % i
+
 
 
 if __name__ == "__main__":
@@ -388,7 +391,6 @@ if __name__ == "__main__":
     notesize = min(note.shape[:2])
 
     note_cropped = submatrix(note, note.shape[1] / 2, note.shape[0] / 2, notesize)
-
     note_cropped = remove_gradient(note_cropped)
 
     find_notes_on_board([note_cropped], board)

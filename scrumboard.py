@@ -48,9 +48,7 @@ import common
 from common import qimshow
 import webcam
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt5 import QtWidgets
 
 wndname = "Scrumboard"
 calibrationdata = None
@@ -374,7 +372,7 @@ def determine_average_colors(image):
 # - warn about significant areas with color (outside todo/done) not covered by notes
 if __name__ == "__main__":
 
-    app = QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
 
     loadcalibrationdata()
     image = webcam.grab()
