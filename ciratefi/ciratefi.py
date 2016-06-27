@@ -26,62 +26,9 @@ import sys
 
 sys.path.append('..')
 
-import common
+from common import qimshow
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-
-class ImageLabel(QLabel):
-    def __init__(self, image):
-        QLabel.__init__(self, None)
-
-        self.image = image
-        self.redraw()
-
-    def redraw(self):
-        pixmap = common.cvimage_to_qpixmap(self.image)
-	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
-        self.setPixmap(pixmap)
-
-class ImageDialog(QDialog):
-
-    def __init__(self, images, text=None):
-        super(ImageDialog, self).__init__()
-
-        if not isinstance(images, (list, tuple)):
-            images = [images]
-
-        if not isinstance(images[0], (list, tuple)):
-            images = [images]
-
-        vbox = QVBoxLayout()
-
-        if text != None:
-            vbox.addWidget(QLabel(text))
-
-        for imagelist in images:
-            hbox = QHBoxLayout()
-            for image in imagelist:
-                hbox.addWidget(ImageLabel(image))
-            vbox.addLayout(hbox)
-
-        buttonBox = QDialogButtonBox(self)
-        buttonBox.setGeometry(QRect(150, 250, 341, 32))
-        buttonBox.setOrientation(Qt.Horizontal)
-        buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
-        buttonBox.setObjectName("buttonBox")
-        vbox.addWidget(buttonBox)
-
-        self.setLayout(vbox)
-
-        buttonBox.accepted.connect(self.accept)
-        buttonBox.rejected.connect(self.reject)
-
-def qimshow(images, text=None):
-    dlg = ImageDialog(images, text)
-    if dlg.exec_() != 1:
-        raise Exception('Aborting. User pressed cancel.')
+from PyQt5 import QtWidgets
 
 # Determines the start and end of source and destination ranges for copying
 # 'dest_size' pixels out of a range of 'source_size' pixels starting at offset
@@ -391,7 +338,7 @@ class Ciratefi:
                 diff_y = y - final_match[2]
                 if diff_x * diff_x + diff_y * diff_y > self.notesize * self.notesize:
                     print 'second best match is at (%d,%d) with correlation %f' % (x, y, corr)
-                    qimshow(submatrix(self.board, x, y, self.notesize))
+                    #qimshow(submatrix(self.board, x, y, self.notesize))
                     break
 
             return final_match
@@ -411,6 +358,9 @@ def find_notes_on_board(notes, board):
         for x, y in first_grade_candidates:
             cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
 
+        qimshow(board_with_markers)
+
+
         second_grade_candidates = ciratefi.rafi(note, first_grade_candidates)
 
         for x, y, cshift in second_grade_candidates:
@@ -418,7 +368,8 @@ def find_notes_on_board(notes, board):
             cv2.circle(board_with_markers, (x, y), 3, (255, 0, 0))
             cv2.circle(board_with_markers, (x, y), 4, (255, 0, 0))
 
-        qimshow([board_with_markers])
+        qimshow(board_with_markers)
+
 
         final_match = ciratefi.tefi(note, second_grade_candidates)
 
@@ -430,7 +381,7 @@ def find_notes_on_board(notes, board):
 
 if __name__ == "__main__":
 
-    app = QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
 
     note = cv2.imread('img3note.png', 1)
     board = cv2.imread('../photos/downscaled/img2.jpg', 1)

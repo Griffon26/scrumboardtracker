@@ -65,4 +65,55 @@ def cvimage_to_qpixmap(image):
 
     return qpixmap
 
+class ImageLabel(QLabel):
+    def __init__(self, image):
+        QLabel.__init__(self, None)
+
+        self.image = image
+        self.redraw()
+
+    def redraw(self):
+        pixmap = cvimage_to_qpixmap(self.image)
+        self.setGeometry(300, 300, pixmap.width(), pixmap.height())
+        self.setPixmap(pixmap)
+
+class ImageDialog(QDialog):
+
+    def __init__(self, images, text=None):
+        super(ImageDialog, self).__init__()
+
+        if not isinstance(images, (list, tuple)):
+            images = [images]
+
+        if not isinstance(images[0], (list, tuple)):
+            images = [images]
+
+        vbox = QVBoxLayout()
+
+        if text != None:
+            vbox.addWidget(QLabel(text))
+
+        for imagelist in images:
+            hbox = QHBoxLayout()
+            for image in imagelist:
+                hbox.addWidget(ImageLabel(image))
+            vbox.addLayout(hbox)
+
+        buttonBox = QDialogButtonBox(self)
+        buttonBox.setGeometry(QRect(150, 250, 341, 32))
+        buttonBox.setOrientation(Qt.Horizontal)
+        buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
+        buttonBox.setObjectName("buttonBox")
+        vbox.addWidget(buttonBox)
+
+        self.setLayout(vbox)
+
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+
+def qimshow(images, text=None):
+    dlg = ImageDialog(images, text)
+    if dlg.exec_() != 1:
+        raise Exception('Aborting. User pressed cancel.')
+
 
