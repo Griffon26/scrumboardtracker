@@ -230,6 +230,204 @@ def flatten_disc(img, center, radius):
 
     return np.array(values)
 
+class Ciratefi:
+
+    def __init__(self, board, notesize, settings = {}):
+        self.settings = {
+            'nr_of_radii' : 13,
+            'nr_of_rotation_angles' : 36,
+            'min_nr_of_first_grade_candidates' : 10,
+            'percentage_of_first_grade_candidates' : 0.1,
+            'min_nr_of_second_grade_candidates' : 10,
+            'percentage_of_second_grade_candidates' : 1,
+            'thresh_contrast' : 0.1,
+            'thresh_brightness' : 255.0,
+            'thresh_confidence' : 0.5
+        }
+        self.settings.update(settings)
+        self.notesize = notesize
+        self.board = board.copy()
+
+        print 'Performing cifi on the board'
+        self.cifi_masks = []
+        self.cifi_board = []
+        for i in range(0, self.settings['nr_of_radii']):
+            mask = np.zeros((notesize, notesize), dtype=np.uint8)
+            cv2.circle(mask, (notesize / 2, notesize / 2), int((i * (notesize / 2.0)) / self.settings['nr_of_radii']), (255,255,255))
+            self.cifi_masks.append(mask)
+
+            maskcount = cv2.countNonZero(mask)
+
+            fmask = np.float32(mask) / 255
+            fmask = fmask / maskcount
+
+            self.cifi_board.append(cv2.filter2D(board, -1, fmask))
+
+    def cifi(self, note):
+        print 'Performing cifi'
+        cifi_means = []
+        for i in range(0, self.settings['nr_of_radii']):
+            cifi_means.append(cv2.mean(note, self.cifi_masks[i])[0])
+
+        candidates_with_correlation = []
+
+        C_A = [ np.float32(self.cifi_board[k]) for k in range(self.settings['nr_of_radii']) ]
+        C_Q = np.array(cifi_means)
+
+        correlation = calculate_image_correlation(C_Q, C_A, self.settings['thresh_contrast'],
+                                                            self.settings['thresh_brightness'])
+
+        nr_of_candidates = cv2.countNonZero(correlation)
+        nr_of_first_grade_candidates = int((nr_of_candidates * self.settings['percentage_of_first_grade_candidates']) / 100)
+        if nr_of_first_grade_candidates < self.settings['min_nr_of_first_grade_candidates']:
+            nr_of_first_grade_candidates = min(nr_of_candidates, self.settings['min_nr_of_first_grade_candidates'])
+
+        sorted_indices = np.argsort(correlation, None)[-nr_of_first_grade_candidates:]
+        sorted_indexpairs = np.unravel_index(sorted_indices, correlation.shape)
+
+        first_grade_candidates = sorted([ (x, y) for y, x in zip(*sorted_indexpairs) ])
+
+        return first_grade_candidates
+
+    def rafi(self, note, first_grade_candidates):
+        print 'Performing rafi'
+
+        rafi_masks = []
+        rafi_means = []
+        for i in range(self.settings['nr_of_rotation_angles']):
+            angle = -(math.pi / 2) + (i * 2 * math.pi) / 36
+
+            halfnotesize = self.notesize / 2
+
+            p1 = (halfnotesize, halfnotesize)
+            p2 = (int(halfnotesize + halfnotesize * math.cos(angle)),
+                  int(halfnotesize + halfnotesize * math.sin(angle)))
+
+            mask = np.zeros((self.notesize, self.notesize), dtype=np.uint8)
+            cv2.line(mask, p1, p2, (255,255,255))
+            rafi_masks.append(mask)
+            rafi_means.append(cv2.mean(note, mask)[0])
+
+        rafi_means = np.array(rafi_means)
+
+        candidate_means = []
+        for x, y in first_grade_candidates:
+            candidate = submatrix(self.board, x, y, self.notesize)
+            #qimshow(candidate)
+            this_candidate_means = []
+            for mask in rafi_masks:
+                this_candidate_means.append(cv2.mean(candidate, mask)[0])
+            candidate_means.append(this_candidate_means)
+
+        candidates_with_correlation = []
+        for i, this_candidate_means in enumerate(candidate_means):
+            x, y = first_grade_candidates[i]
+
+            this_candidate_rascorrs = []
+
+            max_rascorr = -2
+            max_cshift = None
+
+            for cshift in range(self.settings['nr_of_rotation_angles']):
+                rotated_rafi_means = np.roll(rafi_means, cshift)
+
+                rascorr = calculate_correlation(np.array(this_candidate_means),
+                                                rotated_rafi_means,
+                                                self.settings['thresh_contrast'],
+                                                self.settings['thresh_brightness'])
+
+                this_candidate_rascorrs.append(rascorr)
+
+                if rascorr > max_rascorr:
+                    max_rascorr = rascorr
+                    max_cshift = cshift
+
+            candidates_with_correlation.append( (max_rascorr, x, y, max_cshift) )
+
+        nr_of_second_grade_candidates = int((len(candidates_with_correlation) * self.settings['percentage_of_second_grade_candidates']) / 100)
+        if nr_of_second_grade_candidates < self.settings['min_nr_of_second_grade_candidates']:
+            nr_of_second_grade_candidates = min(len(candidates_with_correlation), self.settings['min_nr_of_second_grade_candidates'])
+        second_grade_candidates = sorted([ (x, y, cshift) for _, x, y, cshift in
+                                           sorted(candidates_with_correlation, reverse=True)[:nr_of_second_grade_candidates] ])
+
+        return second_grade_candidates
+
+    def tefi(self, note, second_grade_candidates):
+        print 'Performing tefi'
+
+        rotated_templates = []
+        for cshift in range(self.settings['nr_of_rotation_angles']):
+            rotation_matrix = cv2.getRotationMatrix2D((self.notesize / 2, self.notesize / 2), -cshift * 10, 1)
+            rotated_note = cv2.warpAffine(note, rotation_matrix, (self.notesize, self.notesize))
+            masked_rotated_note = flatten_disc(rotated_note, (self.notesize / 2, self.notesize / 2), self.notesize / 2)
+            rotated_templates.append(masked_rotated_note)
+
+        candidates_with_correlation = []
+        for x, y, cshift in second_grade_candidates:
+            for x2 in [x - 1, x, x + 1]:
+                for y2 in [y - 1, y, y + 1]:
+                    possible_match = submatrix(self.board, x2, y2, self.notesize)
+                    masked_possible_match = flatten_disc(possible_match, (self.notesize / 2, self.notesize / 2), self.notesize / 2)
+                    corr = calculate_correlation(rotated_templates[cshift],
+                                                 masked_possible_match,
+                                                 self.settings['thresh_contrast'],
+                                                 self.settings['thresh_brightness'])
+                    #print 'correlation with second grade candidate at (%d,%d) is %f' % (x2, y2, corr)
+                    candidates_with_correlation.append( (corr, x2, y2) )
+
+        candidates_with_correlation.sort(reverse = True)
+
+        final_match = candidates_with_correlation[0]
+
+        if final_match[0] < self.settings['thresh_confidence']:
+            print 'no match was found. The best was at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
+            qimshow(submatrix(self.board, final_match[1], final_match[2], self.notesize))
+            return None
+        else:
+            print 'final match is at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
+            qimshow(submatrix(self.board, final_match[1], final_match[2], self.notesize))
+            for corr, x, y in candidates_with_correlation:
+                diff_x = x - final_match[1]
+                diff_y = y - final_match[2]
+                if diff_x * diff_x + diff_y * diff_y > self.notesize * self.notesize:
+                    print 'second best match is at (%d,%d) with correlation %f' % (x, y, corr)
+                    qimshow(submatrix(self.board, x, y, self.notesize))
+                    break
+
+            return final_match
+
+def find_notes_on_board(notes, board):
+
+    board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
+    board_with_markers = cv2.cvtColor(board, cv2.COLOR_GRAY2BGR)
+
+    ciratefi = Ciratefi(board, notes[0].shape[0])
+
+    for i, note in enumerate(notes):
+        note = cv2.cvtColor(note, cv2.COLOR_BGR2GRAY)
+
+        first_grade_candidates = ciratefi.cifi(note)
+
+        for x, y in first_grade_candidates:
+            cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
+
+        second_grade_candidates = ciratefi.rafi(note, first_grade_candidates)
+
+        for x, y, cshift in second_grade_candidates:
+            print 'best rotation for second grade candidate at %d,%d is %d' % (x, y, cshift * 10)
+            cv2.circle(board_with_markers, (x, y), 3, (255, 0, 0))
+            cv2.circle(board_with_markers, (x, y), 4, (255, 0, 0))
+
+        qimshow([board_with_markers])
+
+        final_match = ciratefi.tefi(note, second_grade_candidates)
+
+        if final_match:
+            print 'final match found for note %d at %s' % (i, final_match)
+        else:
+            print 'no match found for note %d' % i
+
+
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
@@ -242,175 +440,6 @@ if __name__ == "__main__":
 
     note_cropped = remove_gradient(note_cropped)
 
-    note = cv2.cvtColor(note_cropped, cv2.COLOR_BGR2GRAY)
-    board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
-
-    nr_of_radii = 13
-    min_nr_of_first_grade_candidates = 10
-    percentage_of_first_grade_candidates = 0.1
-    min_nr_of_second_grade_candidates = 10
-    percentage_of_second_grade_candidates = 1
-    thresh_contrast = 0.1
-    thresh_brightness = 255.0
-    threshold3 = 0.5
-
-
-    print 'Performing cifi'
-
-    cifi_masks = []
-    cifi_means = []
-    cifi_fmasks = []
-    cifi_filtered = []
-    cifi_board = []
-    for i in range(0, nr_of_radii):
-        mask = np.zeros((notesize, notesize), dtype=np.uint8)
-        cv2.circle(mask, (notesize / 2, notesize / 2), int((i * (notesize / 2.0)) / nr_of_radii), (255,255,255))
-        cifi_masks.append(mask)
-        cifi_means.append(cv2.mean(note, mask)[0])
-
-        maskcount = cv2.countNonZero(mask)
-
-        fmask = np.float32(mask) / 255
-        fmask = fmask / maskcount
-        cifi_fmasks.append(fmask)
-
-        cifi_board.append(cv2.filter2D(board, -1, fmask))
-
-
-    candidates_with_correlation = []
-    board_with_markers = cv2.cvtColor(board, cv2.COLOR_GRAY2BGR)
-
-    C_A = [ np.float32(cifi_board[k]) for k in range(nr_of_radii) ]
-    C_Q = np.array(cifi_means)
-
-    correlation = calculate_image_correlation(C_Q, C_A, thresh_contrast, thresh_brightness)
-
-    nr_of_candidates = cv2.countNonZero(correlation)
-    nr_of_first_grade_candidates = int((nr_of_candidates * percentage_of_first_grade_candidates) / 100)
-    if nr_of_first_grade_candidates < min_nr_of_first_grade_candidates:
-        nr_of_first_grade_candidates = min(nr_of_candidates, min_nr_of_first_grade_candidates)
-
-    sorted_indices = np.argsort(correlation, None)[-nr_of_first_grade_candidates:]
-    sorted_indexpairs = np.unravel_index(sorted_indices, correlation.shape)
-
-    first_grade_candidates = sorted([ (x, y) for y, x in zip(*sorted_indexpairs) ])
-
-
-    print 'first_grade_candidates: %s' % first_grade_candidates
-
-    for x, y in first_grade_candidates:
-        cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
-
-    #qimshow([ [note, board_with_markers],
-    #          cifi_masks,
-    #          cifi_fmasks ]
-    #          )
-
-    print 'Performing rafi'
-
-    nr_of_rotation_angles = 36
-
-    rafi_masks = []
-    rafi_means = []
-    for i in range(nr_of_rotation_angles):
-        angle = -(math.pi / 2) + (i * 2 * math.pi) / 36
-
-        halfnotesize = notesize / 2
-
-        p1 = (halfnotesize, halfnotesize)
-        p2 = (int(halfnotesize + halfnotesize * math.cos(angle)),
-              int(halfnotesize + halfnotesize * math.sin(angle)))
-
-        mask = np.zeros((notesize, notesize), dtype=np.uint8)
-        cv2.line(mask, p1, p2, (255,255,255))
-        rafi_masks.append(mask)
-        rafi_means.append(cv2.mean(note, mask)[0])
-
-    rafi_means = np.array(rafi_means)
-    print 'rafi_means', [int(x) for x in rafi_means]
-
-    candidate_means = []
-    for x, y in first_grade_candidates:
-        candidate = submatrix(board, x, y, notesize)
-        #qimshow(candidate)
-        this_candidate_means = []
-        for mask in rafi_masks:
-            this_candidate_means.append(cv2.mean(candidate, mask)[0])
-        #print 'means for candidate at (%d, %d) are %s' % (x, y, [int(x) for x in this_candidate_means])
-        candidate_means.append(this_candidate_means)
-
-    candidates_with_correlation = []
-    for i, this_candidate_means in enumerate(candidate_means):
-        x, y = first_grade_candidates[i]
-
-        this_candidate_rascorrs = []
-
-        max_rascorr = -2
-        max_cshift = None
-
-        for cshift in range(nr_of_rotation_angles):
-            rotated_rafi_means = np.roll(rafi_means, cshift)
-
-            rascorr = calculate_correlation(np.array(this_candidate_means), rotated_rafi_means, thresh_contrast, thresh_brightness)
-
-            this_candidate_rascorrs.append(rascorr)
-
-            if rascorr > max_rascorr:
-                max_rascorr = rascorr
-                max_cshift = cshift
-
-        candidates_with_correlation.append( (max_rascorr, x, y, max_cshift) )
-
-    nr_of_second_grade_candidates = int((len(candidates_with_correlation) * percentage_of_second_grade_candidates) / 100)
-    if nr_of_second_grade_candidates < min_nr_of_second_grade_candidates:
-        nr_of_second_grade_candidates = min(len(candidates_with_correlation), min_nr_of_second_grade_candidates)
-    second_grade_candidates = sorted([ (x, y, cshift) for _, x, y, cshift in
-                                       sorted(candidates_with_correlation, reverse=True)[:nr_of_second_grade_candidates] ])
-
-    for x, y, cshift in second_grade_candidates:
-        print 'best rotation for second grade candidate at %d,%d is %d' % (x, y, cshift * 10)
-        cv2.circle(board_with_markers, (x, y), 3, (255, 0, 0))
-        cv2.circle(board_with_markers, (x, y), 4, (255, 0, 0))
-
-    qimshow([board_with_markers])
-
-    print 'Performing tefi'
-
-    rotated_templates = []
-    for cshift in range(nr_of_rotation_angles):
-        rotation_matrix = cv2.getRotationMatrix2D((notesize / 2, notesize / 2), -cshift * 10, 1)
-        rotated_note = cv2.warpAffine(note, rotation_matrix, (notesize, notesize))
-        masked_rotated_note = flatten_disc(rotated_note, (notesize / 2, notesize / 2), notesize / 2)
-        rotated_templates.append(masked_rotated_note)
-
-    candidates_with_correlation = []
-    for x, y, cshift in second_grade_candidates:
-        for x2 in [x - 1, x, x + 1]:
-            for y2 in [y - 1, y, y + 1]:
-                possible_match = submatrix(board, x2, y2, notesize)
-                masked_possible_match = flatten_disc(possible_match, (notesize / 2, notesize / 2), notesize / 2)
-                corr = calculate_correlation(rotated_templates[cshift], masked_possible_match, thresh_contrast, thresh_brightness)
-                #print 'correlation with second grade candidate at (%d,%d) is %f' % (x2, y2, corr)
-                candidates_with_correlation.append( (corr, x2, y2) )
-
-    candidates_with_correlation.sort(reverse = True)
-
-    final_match = candidates_with_correlation[0]
-
-    if final_match[0] < threshold3:
-        print 'no match was found. The best was at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
-        qimshow(submatrix(board, final_match[1], final_match[2], notesize))
-    else:
-        print 'final match is at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
-        qimshow(submatrix(board, final_match[1], final_match[2], notesize))
-        for corr, x, y in candidates_with_correlation:
-            diff_x = x - final_match[1]
-            diff_y = y - final_match[2]
-            if diff_x * diff_x + diff_y * diff_y > notesize * notesize:
-                print 'second best match is at (%d,%d) with correlation %f' % (x, y, corr)
-                qimshow(submatrix(board, x, y, notesize))
-                break
-
-
+    find_notes_on_board([note_cropped], board)
 
 
