@@ -328,3 +328,14 @@ class Ciratefi:
 
         return final_match[1:]
 
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
+
+    board = cv2.imread('board.png')
+    note = cv2.imread('note.png')
+
+    common.qimshow([note, board], 'searching for left image in right image')
+
+    ciratefi = Ciratefi(board, note.shape[0], debug=True)
+    match = ciratefi.find(note)
+
