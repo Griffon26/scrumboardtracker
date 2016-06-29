@@ -131,11 +131,9 @@ class Scrumboard():
             f.write(json.dumps(self.to_serializable()))
 
     def to_serializable(self):
-        return { 'linepositions' : self.linepositions,
-                 'tasknotes' : [tasknote.to_serializable() for tasknote in self.tasknotes] }
+        return { 'tasknotes' : [tasknote.to_serializable() for tasknote in self.tasknotes] }
 
     def from_serializable(self, data):
-        self.linepositions = data['linepositions']
         self.tasknotes = []
         for tasknote_data in data['tasknotes']:
             tasknote = TaskNote(None, None)
@@ -179,7 +177,7 @@ class TaskNote():
         self.state = data['state']
         self.bitmap = np.array(data['bitmap'], dtype=np.uint8)
 
-    def setstate(newstate):
+    def setstate(self, newstate):
         self.state = newstate
 
     def find(self, image):
@@ -248,11 +246,11 @@ def findsquares(image):
 
     normmarkers = cv2.normalize(markers, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
     #print 'showing markers after watershed'
-    #qimshow(normmarkers)
+    qimshow(normmarkers)
 
     squares = []
     for i in xrange(n_comps):
-        singlecomponent = cv2.inRange(markers, i, i)
+        singlecomponent = cv2.inRange(markers, i + 1, i + 1)
 
         _, contours, _ = cv2.findContours(singlecomponent.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -268,17 +266,18 @@ def findsquares(image):
                 contour = contours[0]
 
                 center, radius = cv2.minEnclosingCircle(contour)
-                size = (int(radius) * 2, int(radius) * 2)
 
-                singlecontour = cv2.getRectSubPix(singlecomponent, size, center)
-                imagecutout = cv2.getRectSubPix(image, size, center)
+                size = int(radius) * 2
+                singlecontour = common.submatrix(singlecomponent, center[0], center[1], size)
+                imagecutout = common.submatrix(image, center[0], center[1], size)
 
-                print 'showing imagecutout'
-                #qimshow(singlecontour)
+                print 'showing singlecontour'
+                qimshow(singlecontour)
 
                 try:
                     angle, topleft, size, square_bitmap = find_largest_overlapping_square(singlecontour, imagecutout)
                 except NoMatchingSquareError:
+                    print 'no square'
                     # continue with the next component
                     continue
                 squares.append(Square(square_bitmap, center))
@@ -299,7 +298,7 @@ def findsquares(image):
                 rotatedframe = cv2.cvtColor( rotatedframe, cv2.COLOR_GRAY2BGR )
                 cutout_with_frame = cv2.addWeighted(imagecutout, 1.0, rotatedframe, 0.5, 0)
                 print 'showing imagecutout with frame'
-                #qimshow(cutout_with_frame)
+                qimshow(cutout_with_frame)
 
     return squares
 
@@ -310,9 +309,6 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
     newcenter = (singlecontour.shape[0] / 2, singlecontour.shape[1] / 2)
 
-    print('imagecutout.shape', imagecutout.shape)
-    #qimshow(imagecutout)
-
     for angle in xrange(-16,17):
         rotation = cv2.getRotationMatrix2D(newcenter, angle, 1.0)
         rotatedcontour = cv2.warpAffine(singlecontour, rotation, singlecontour.shape)
@@ -321,7 +317,7 @@ def find_largest_overlapping_square(singlecontour, imagecutout):
 
         offsetcontour = rotatedcontour.astype(np.float32) - 160
 
-        for kernel_size in xrange(common.NOTE_SIZE, int(min(imagecutout.shape[0], common.NOTE_SIZE * 1.1))):
+        for kernel_size in [common.NOTE_SIZE]: #xrange(common.NOTE_SIZE, int(min(imagecutout.shape[0], common.NOTE_SIZE * 1.1))):
             boxfiltered = cv2.boxFilter(offsetcontour, -1, (kernel_size, kernel_size), None, (0,0), False)
 
             norm = cv2.normalize(boxfiltered, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
@@ -381,11 +377,11 @@ if __name__ == "__main__":
     print 'showing grabbed image'
     #qimshow(image)
 
-    correctedimage = common.correct_perspective(remove_color_cast(image), calibrationdata, False)
+    correctedimage, scaled_linepositions = common.correct_perspective(remove_color_cast(image), calibrationdata, False)
 
     # The rest of this program should:
 
-    scrumboard = Scrumboard(calibrationdata['linepositions'])
+    scrumboard = Scrumboard(scaled_linepositions)
 
     # read the known state of the board from file:
     # (consists of bitmaps for all known notes and last known state for each)
@@ -393,16 +389,20 @@ if __name__ == "__main__":
 
     ciratefi = Ciratefi(correctedimage, common.NOTE_SIZE, debug=True)
 
+    unidentified_notes = []
     for note in scrumboard.tasknotes:
-        print 'Searching for task note in state %s' % note.state
-        qimshow(note.bitmap, 'Searching for task note in state %s' % note.state)
+        print 'Searching for task note previously in state %s' % note.state
+        qimshow(note.bitmap, 'Searching for task note previously in state %s' % note.state)
         match = ciratefi.find(note.bitmap)
 
         if match:
-            print 'Task note found at (%d,%d)' % match
+            newstate = scrumboard.get_state_from_position(match)
+            note.setstate(newstate)
+            print 'Task note found at %s. Updating state to %s' % (match, newstate)
             qimshow(common.submatrix(correctedimage, match[0], match[1], common.NOTE_SIZE), 'Task note found at (%d,%d)' % match)
         else:
             print 'Task note not found'
+            unidentified_notes.append(note)
 
     # identify any squares on the board
     squares_in_photo = findsquares(correctedimage)
@@ -414,7 +414,7 @@ if __name__ == "__main__":
     matches_per_square = []
     for square in squares_in_photo:
         matching_tasknotes = []
-        for tasknote in scrumboard.tasknotes:
+        for tasknote in unidentified_notes:
             if square.lookslike(tasknote):
                 matching_tasknotes.append(tasknote)
         matches_per_square.append(matching_tasknotes)

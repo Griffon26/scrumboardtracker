@@ -69,7 +69,7 @@ def correct_perspective(image, calibrationdata, fixedscale):
         scale = 1
     else:
         scale = (1.0 * NOTE_SIZE) / calibrationdata['averagenotesize']
-    print('scale', scale)
+    #print 'scale: ', scale
 
     orderedcorners = np.array(calibrationdata['corners'], np.float32)
     originalwidth = eucldistance(orderedcorners[0], orderedcorners[1])
@@ -77,15 +77,17 @@ def correct_perspective(image, calibrationdata, fixedscale):
     width = int(scaledwidth)
     height = int(width / aspectratio)
 
-    print 'width: ', width
-    print 'height: ', height
+    #print 'width: ', width
+    #print 'height: ', height
 
     correctedrectangle = np.array([(0,0), (width, 0), (width, height), (0, height)], np.float32)
 
     transformation = cv2.getPerspectiveTransform(orderedcorners, correctedrectangle)
     correctedimage = cv2.warpPerspective(image, transformation, (width, height))
 
-    return correctedimage
+    scaled_linepositions = [l * scale for l in calibrationdata['linepositions']]
+
+    return correctedimage, scaled_linepositions
 
 def cvimage_to_qpixmap(image):
     if image.dtype == np.float32:

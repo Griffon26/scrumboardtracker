@@ -326,7 +326,12 @@ class Ciratefi:
 
         final_match = self._tefi(note, second_grade_candidates)
 
-        return final_match[1:]
+        if final_match:
+            match = final_match[1:]
+        else:
+            match = None
+
+        return match
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)

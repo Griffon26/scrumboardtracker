@@ -293,6 +293,8 @@ if __name__ == "__main__":
 
     image = webcam.grab()
 
+    draggablePoints = [ (min(x, image.shape[1]), min(y, image.shape[0])) for x,y in draggablePoints ]
+
     dlg = BoardSelectionDialog(image, draggablePoints, calibrationdata['aspectratio'])
     if dlg.exec_() != 1:
         raise Exception('Calibration was aborted by the user')
@@ -355,7 +357,7 @@ if __name__ == "__main__":
     # Ask the user for the aspect ratio of the scrumboard (needed for perspective correction)
     #
 
-    correctedimage = common.correct_perspective(image, calibrationdata, True)
+    correctedimage, _ = common.correct_perspective(image, calibrationdata, True)
 
 
     #
@@ -366,6 +368,9 @@ if __name__ == "__main__":
 
     linepositions = calibrationdata['linepositions']
     noteCorners = calibrationdata['notecorners']
+
+    linepositions = [ min(x, correctedimage.shape[1]) for x in linepositions ]
+    noteCorners = [ (min(x, correctedimage.shape[1]), min(y, correctedimage.shape[0])) for x, y in noteCorners ]
 
     if not linepositions:
         linepositions = sorted([(correctedimage.shape[1] / (nr_of_lines + 1) * (i + 1)) for i in xrange(nr_of_lines)])
