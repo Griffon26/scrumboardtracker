@@ -112,11 +112,31 @@ def normalized(img):
 def findnotes(image):
     #averages = determine_average_colors(image)
 
-    common.qimshow(image)
+    #common.qimshow(image)
 
     median = cv2.medianBlur(image, 11)
-    common.qimshow(median)
+    #common.qimshow(median)
+    medianlab = cv2.cvtColor(median, cv2.COLOR_BGR2Lab)
 
+    different_color_threshold = 21
+
+    common.qimshow(image)
+    for x, y in [ (1220, 587), (580, 644), (467, 756), (44, 750) ]:
+
+        onemedian = median.copy()
+        onemedian[:] = median[y][x]
+
+        imagelab = cv2.cvtColor(image, cv2.COLOR_BGR2Lab)
+        onemedianlab = cv2.cvtColor(onemedian, cv2.COLOR_BGR2Lab)
+
+        common.qimshow(onemedian)
+        for thresh in range(different_color_threshold, different_color_threshold + 1):
+            absdiff = cv2.absdiff(imagelab, onemedianlab)
+            b, g, r = cv2.split(absdiff)
+            norm = cv2.sqrt(np.float32(b) * b + g * g + r * r)
+            deviatingpixels = (norm > thresh).astype(np.float32)
+            common.qimshow(normalized(deviatingpixels))
+         
     padded = np.pad(image, ((common.NOTE_SIZE / 2, common.NOTE_SIZE / 2), (common.NOTE_SIZE / 2, common.NOTE_SIZE / 2), (0,0)), 'constant')
 
     circle = createCircularKernel()
@@ -148,23 +168,34 @@ def findnotes(image):
         for x in range(circle.shape[1]):
             if circle[y][x] != 0:
                 shifted = padded[y:y + image.shape[0], x:x + image.shape[1]]
-                shifteds.append(shifted)
+                shiftedlab = cv2.cvtColor(shifted, cv2.COLOR_BGR2Lab)
+                shifteds.append(shiftedlab)
 
     deviation = np.zeros(image.shape[:2], dtype=np.float32)
     for shifted in shifteds:
-        absdiff = cv2.absdiff(shifted, median)
+        absdiff = cv2.absdiff(shifted, medianlab)
         b, g, r = cv2.split(absdiff)
         norm = cv2.sqrt(np.float32(b) * b + g * g + r * r)
-        deviatingpixels = (norm > 15).astype(np.float32)
+        deviatingpixels = (norm > different_color_threshold).astype(np.float32)
         #common.qimshow([median, shifted, absdiff, r, g, b, np.uint8(norm), deviatingpixels])
         deviation += deviatingpixels
 
     hsv = cv2.cvtColor( median, cv2.COLOR_BGR2HSV )
     _, saturation, _ = cv2.split(hsv)
     no_color = cv2.inRange(saturation, 0, 24)
+    color = cv2.bitwise_not(no_color)
 
-    minval, maxval, _, _ = cv2.minMaxLoc(deviation)
+    minval, maxval, _, _ = cv2.minMaxLoc(deviation, color)
     print minval, maxval
+
+    masked_deviation = deviation.copy()
+    masked_deviation[no_color == 255] = maxval
+
+    minimal_deviation = cv2.inRange(masked_deviation, 0, 150)
+
+
+
+
 
     kernel = np.ones((common.NOTE_SIZE / 2, common.NOTE_SIZE / 2), np.uint8)
     deviation_eroded = cv2.erode(deviation, kernel)
@@ -173,7 +204,7 @@ def findnotes(image):
     local_min_only = cv2.inRange(local_min_at_zero, 0, 0)
     local_min_only[no_color == 255] = 0
 
-    _, contours, _ = cv2.findContours(local_min_only, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    _, contours, _ = cv2.findContours(minimal_deviation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     annotatedimage = image.copy()
     for contour in contours:
@@ -182,8 +213,7 @@ def findnotes(image):
         print 'contour is at %s' % (center,)
 
     common.qimshow([ [median],
-                     [normalized(deviation), normalized(deviation_eroded), normalized(local_min_at_zero)],
-                     [local_min_only],
+                     [normalized(deviation), no_color, normalized(masked_deviation), minimal_deviation],
                      [annotatedimage]
                    ])
 
