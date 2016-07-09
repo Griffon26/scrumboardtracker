@@ -89,6 +89,51 @@ def correct_perspective(image, calibrationdata, fixedscale):
 
     return correctedimage, scaled_linepositions
 
+def remove_color_cast(image, calibrationdata):
+    bgr_planes = cv2.split(image)
+
+    backgroundpos = calibrationdata['background']
+    average_bgr = image[backgroundpos[1]][backgroundpos[0]]
+    print 'bgr of scrumboard background:', average_bgr
+
+    for i in xrange(3):
+        thresh = average_bgr[i]
+        plane = bgr_planes[i]
+        print "Showing plane"
+        #qimshow(plane);
+
+        retval, mask = cv2.threshold(plane, thresh, 255, cv2.THRESH_BINARY);
+        print "Showing mask"
+        #qimshow(mask)
+
+        highvalues = (plane - thresh) * (128.0 / (255 - thresh)) + 128;
+        highvalues = highvalues.astype(np.uint8)
+
+        highvalues_masked = cv2.bitwise_and(highvalues, mask)
+        print "Showing scaled high values"
+        #qimshow(highvalues_masked)
+
+        mask = 255 - mask;
+        lowvalues = cv2.bitwise_and(plane, mask)
+        print "Showing low values"
+        #qimshow(lowvalues)
+
+        lowvalues = lowvalues * 128.0 / thresh
+        lowvalues = lowvalues.astype(np.uint8)
+        print "Showing scaled low values"
+        #qimshow(lowvalues)
+
+        bgr_planes[i] = lowvalues + highvalues_masked
+        print "Showing scaled plane"
+        #qimshow(bgr_planes[i])
+
+    correctedimage = cv2.merge(bgr_planes)
+    correctedimage = correctedimage.astype(np.uint8)
+    print "Showing corrected image"
+    #qimshow(correctedimage)
+
+    return correctedimage
+
 def cvimage_to_qpixmap(image):
     if image.dtype == np.float32:
         image = (image * 255).astype(np.uint8)
@@ -118,24 +163,24 @@ class ImageLabel(QLabel):
 
 class ImageDialog(QDialog):
 
-    def __init__(self, images, text=None):
+    def __init__(self, images_and_text):
         super(ImageDialog, self).__init__()
 
-        if not isinstance(images, (list, tuple)):
-            images = [images]
+        if not isinstance(images_and_text, (list, tuple)):
+            images_and_text = [images_and_text]
 
-        if not isinstance(images[0], (list, tuple)):
-            images = [images]
+        if not isinstance(images_and_text[0], (list, tuple)):
+            images_and_text = [images_and_text]
 
         vbox = QVBoxLayout()
 
-        if text != None:
-            vbox.addWidget(QLabel(text))
-
-        for imagelist in images:
+        for itemlist in images_and_text:
             hbox = QHBoxLayout()
-            for image in imagelist:
-                hbox.addWidget(ImageLabel(image))
+            for item in itemlist:
+                if isinstance(item, str):
+                    hbox.addWidget(QLabel(item))
+                else:
+                    hbox.addWidget(ImageLabel(item))
             vbox.addLayout(hbox)
 
         buttonBox = QDialogButtonBox(self)
@@ -150,8 +195,8 @@ class ImageDialog(QDialog):
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
 
-def qimshow(images, text=None):
-    dlg = ImageDialog(images, text)
+def qimshow(images_and_text):
+    dlg = ImageDialog(images_and_text)
     if dlg.exec_() != 1:
         raise Exception('Aborting. User pressed cancel.')
 

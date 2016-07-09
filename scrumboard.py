@@ -377,7 +377,7 @@ if __name__ == "__main__":
     print 'showing grabbed image'
     #qimshow(image)
 
-    correctedimage, scaled_linepositions = common.correct_perspective(remove_color_cast(image), calibrationdata, False)
+    correctedimage, scaled_linepositions = common.correct_perspective(common.remove_color_cast(image, calibrationdata), calibrationdata, False)
 
     # The rest of this program should:
 
