@@ -268,10 +268,10 @@ def loadCalibrationData():
         calibrationdata['aspectratio'] = [1.0, 1.0]
 
     if 'linepositions' not in calibrationdata:
-        calibrationdata['linepositions'] = None
+        calibrationdata['linepositions'] = []
 
     if 'notecorners' not in calibrationdata:
-        calibrationdata['notecorners'] = None
+        calibrationdata['notecorners'] = []
     else:
         calibrationdata['notecorners'] = [ (x, y) for x, y in calibrationdata['notecorners'] ]
 
