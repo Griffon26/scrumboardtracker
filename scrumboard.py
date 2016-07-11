@@ -272,7 +272,7 @@ def findsquares(image):
                 imagecutout = common.submatrix(image, center[0], center[1], size)
 
                 print 'showing singlecontour'
-                qimshow(singlecontour)
+                #qimshow(singlecontour)
 
                 try:
                     angle, topleft, size, square_bitmap = find_largest_overlapping_square(singlecontour, imagecutout)
@@ -357,7 +357,7 @@ def determine_average_colors(image):
     kernelSize = cv2.countNonZero(circleKernel)
 
     averages = cv2.filter2D(image, -1, circleKernel.astype(np.float32) / kernelSize)
-    qimshow(averages)
+    #qimshow(averages)
     return averages
 
 # The basic algorithm for updating the scrumboard state from an image is this:
@@ -387,7 +387,7 @@ if __name__ == "__main__":
     # (consists of bitmaps for all known notes and last known state for each)
     scrumboard.load_state_from_file()
 
-    ciratefi = Ciratefi(correctedimage, common.NOTE_SIZE, debug=True)
+    ciratefi = Ciratefi(correctedimage, common.NOTE_SIZE, debug=False)
 
     unidentified_notes = []
     for note in scrumboard.tasknotes:

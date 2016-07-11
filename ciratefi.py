@@ -155,7 +155,8 @@ class Ciratefi:
         self.board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
         self.debug = debug
 
-        print 'Performing cifi on the board'
+        if self.debug:
+            print 'Performing cifi on the board'
         self.cifi_masks = []
         self.cifi_board = []
         for i in range(0, self.settings['nr_of_radii']):
@@ -171,7 +172,8 @@ class Ciratefi:
             self.cifi_board.append(cv2.filter2D(self.board, -1, fmask))
 
     def _cifi(self, note):
-        print 'Performing cifi'
+        if self.debug:
+            print 'Performing cifi'
         cifi_means = []
         for i in range(0, self.settings['nr_of_radii']):
             cifi_means.append(cv2.mean(note, self.cifi_masks[i])[0])
@@ -197,7 +199,8 @@ class Ciratefi:
         return first_grade_candidates
 
     def _rafi(self, note, first_grade_candidates):
-        print 'Performing rafi'
+        if self.debug:
+            print 'Performing rafi'
 
         rafi_masks = []
         rafi_means = []
@@ -259,7 +262,8 @@ class Ciratefi:
         return second_grade_candidates
 
     def _tefi(self, note, second_grade_candidates):
-        print 'Performing tefi'
+        if self.debug:
+            print 'Performing tefi'
 
         rotated_templates = []
         for cshift in range(self.settings['nr_of_rotation_angles']):
