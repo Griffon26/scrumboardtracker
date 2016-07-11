@@ -46,6 +46,9 @@ def determine_copy_ranges(offset, source_size, dest_size):
 
 def submatrix(bitmap_in, x, y, size):
 
+    x = int(x)
+    y = int(y)
+
     shape = [size, size]
     if len(bitmap_in.shape) == 3:
         shape.append(bitmap_in.shape[2])
