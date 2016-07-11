@@ -148,21 +148,16 @@ class Scrumboard():
 
         return self.states[-1]
 
+    def get_position_from_state(self, state):
+        positions = [0] + self.linepositions + [None]
+        stateindex = self.states.index(state)
+        return positions[stateindex], positions[stateindex + 1]
+
     def add_tasknote(self, square):
         state = self.get_state_from_position(square.position)
         tasknote = TaskNote(square.bitmap, state)
         self.tasknotes.append(tasknote)
         return tasknote
-
-    def mask_states(self, image, states):
-        masked_image = image.copy()
-
-        positions = [0] + self.linepositions + [image.shape[1]]
-        for state in states:
-            stateindex = self.states.index(state)
-            masked_image[:,positions[stateindex]:positions[stateindex + 1],:] = 0
-
-        return masked_image
 
 class Square():
     def __init__(self, bitmap, position):
@@ -198,14 +193,17 @@ def flatten(list_with_sublists):
     return [item for sublist in list_with_sublists for item in sublist]
 
 def findsquares(scrumboard, image):
-    masked_image = scrumboard.mask_states(image, ('todo', 'done'))
+    _, end_of_todo = scrumboard.get_position_from_state('todo')
+    start_of_done, _ = scrumboard.get_position_from_state('done')
+
+    masked_image = image[:,end_of_todo:start_of_done,:]
     qimshow(masked_image)
     notepositions = findnotes(masked_image)
 
     squares = []
     for pos in notepositions:
-        notebitmap = common.submatrix(image, pos[0], pos[1], common.NOTE_SIZE)
-        squares.append(Square(notebitmap, pos))
+        notebitmap = common.submatrix(image, pos[0] + end_of_todo, pos[1], common.NOTE_SIZE)
+        squares.append(Square(notebitmap, (pos[0] + end_of_todo, pos[1])))
 
         #qimshow(['found square', notebitmap])
 
@@ -322,48 +320,10 @@ if __name__ == "__main__":
 
     # identify any squares on the board
     squares_in_photo = findsquares(scrumboard, maskedimage)
-
-    # make a copy of the list of previously known task notes before we start adding new ones
-    previously_known_tasknotes = copy.copy(scrumboard.tasknotes)
-
-    # take the bitmaps of the squares in the photo and compare them to the bitmaps of all task notes that we know of
-    matches_per_square = []
     for square in squares_in_photo:
-        matching_tasknotes = []
-        for tasknote in unidentified_notes:
-            if square.lookslike(tasknote):
-                matching_tasknotes.append(tasknote)
-        matches_per_square.append(matching_tasknotes)
-
-    # for all matches found, determine which column they are in based on position and update their state
-    # any remaining bitmaps are new ones, store the bitmap and the state
-    for square, matches in zip(squares_in_photo, matches_per_square):
-
-        if len(matches) > 1:
-            raise RuntimeError('More than one task note matched a square')
-        elif len(matches) == 1:
-            newstate = scrumboard.get_state_from_position(square.position)
-            matches[0].setstate(newstate)
-            qimshow([ ['Square with matching notes'],
-                      [[square.bitmap] + matches] ])
-        else: # len(matches) == 0
-            scrumboard.add_tasknote(square)
-
-    # go through the previously known task notes that weren't matched yet and find them on the board
-    for tasknote in previously_known_tasknotes:
-        if tasknote not in set(flatten(matches_per_square)):
-            position = tasknote.find(correctedimage)
-            # for all matches found, determine which column they are in based on position and update their state
-            if position:
-                newstate = scrumboard.get_state_from_position(position)
-                tasknote.setstate(newstate)
-            # any remaining bitmaps are notes that are no longer visible:
-            else:
-                # if the note was Done/Todo before, assume it's still Done/Todo
-                # otherwise, give a warning & highlight
-                if tasknote.state != 'done' and tasknote.state != 'todo':
-                    #raise RuntimeError("Can't find note and it wasn't in todo/done before")
-                    print "Can't find note and it wasn't in todo/done before. Ignoring; note state not updated."
+        state = scrumboard.get_state_from_position(square.position)
+        print 'New task note found at %s. Setting state to %s' % (square.position, state)
+        scrumboard.add_tasknote(square)
 
     # for any significant area of saturation that is not covered by
     # recognized squares, give a warning & highlight that it looks like a bunch of notes
