@@ -279,6 +279,10 @@ def saveCalibrationData():
     with open('calibrationdata.json', 'wb') as f:
         f.write(json.dumps(calibrationdata))
 
+def clamp_points_to_board(points, board):
+    points = [ (min(x, board.shape[1]), min(y, board.shape[0])) for x,y in points ]
+    return points
+
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
@@ -293,13 +297,14 @@ if __name__ == "__main__":
 
     image = webcam.grab()
 
-    draggablePoints = [ (min(x, image.shape[1]), min(y, image.shape[0])) for x,y in draggablePoints ]
+    draggablePoints = clamp_points_to_board(draggablePoints, image)
 
     dlg = BoardSelectionDialog(image, draggablePoints, calibrationdata['aspectratio'])
     if dlg.exec_() != 1:
         raise Exception('Calibration was aborted by the user')
 
     draggablePoints = dlg.getDraggablePoints()
+    draggablePoints = clamp_points_to_board(draggablePoints, image)
     calibrationdata['corners'] = draggablePoints[0:4]
     calibrationdata['background'] = draggablePoints[4]
     calibrationdata['aspectratio'] = dlg.getAspectRatio()
