@@ -47,6 +47,7 @@ import sys
 from ciratefi import Ciratefi
 import common
 from common import qimshow
+from findnotes import findnotes
 import webcam
 
 from PyQt5 import QtWidgets
@@ -153,6 +154,16 @@ class Scrumboard():
         self.tasknotes.append(tasknote)
         return tasknote
 
+    def mask_states(self, image, states):
+        masked_image = image.copy()
+
+        positions = [0] + self.linepositions + [image.shape[1]]
+        for state in states:
+            stateindex = self.states.index(state)
+            masked_image[:,positions[stateindex]:positions[stateindex + 1],:] = 0
+
+        return masked_image
+
 class Square():
     def __init__(self, bitmap, position):
         self.bitmap = bitmap
@@ -186,119 +197,17 @@ class TaskNote():
 def flatten(list_with_sublists):
     return [item for sublist in list_with_sublists for item in sublist]
 
-def findsquares(image):
-    print 'showing image to search for squares'
-    qimshow(image)
-
-    denoised = cv2.pyrUp(cv2.pyrDown(image))
-
-    hsv = cv2.cvtColor( denoised, cv2.COLOR_BGR2HSV )
-    _, saturation, _ = cv2.split(hsv)
-    print 'showing saturation'
-    #qimshow(saturation)
-
-    color_only = cv2.inRange(saturation, 25, 255)
-
-    kernel = np.ones((2,2), np.uint8)
-    color_only = cv2.morphologyEx(color_only, cv2.MORPH_CLOSE, kernel)
-    color_only = cv2.morphologyEx(color_only, cv2.MORPH_OPEN, kernel)
-    print 'showing color_only'
-    #qimshow(color_only)
-
-
-    colorless_only = 255 - color_only
-    distance_to_color = cv2.distanceTransform(colorless_only, cv2.DIST_L2, 3)
-
-    normdist = cv2.normalize(distance_to_color, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-    print 'showing distance_to_color'
-    #qimshow(normdist)
-
-    _, sure_bg = cv2.threshold(distance_to_color, common.NOTE_SIZE / 2.3, 1, cv2.THRESH_BINARY)
-
-    print 'showing sure_bg'
-    #qimshow(sure_bg)
-
-    distance_to_colorless = cv2.distanceTransform(color_only, cv2.DIST_L2, 3)
-
-    normdist = cv2.normalize(distance_to_colorless, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-    #print 'showing distance_to_colorless'
-    #qimshow(normdist)
-
-    _, sure_fg = cv2.threshold(distance_to_colorless, common.NOTE_SIZE / 2.3, 1, cv2.THRESH_BINARY)
-    #print 'showing sure_fg'
-    #qimshow(sure_fg)
-
-    sure_fg8 = np.uint8(sure_fg)
-
-    _, contours, _ = cv2.findContours(sure_fg8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    n_comps = len(contours)
-    markers = np.zeros(sure_fg.shape, np.int32)
-    for i in xrange(n_comps):
-        cv2.drawContours(markers, contours, i, i + 1, -1)
-    markers[sure_bg == 1] = n_comps + 1
-
-    normmarkers = cv2.normalize(markers, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-    #print 'showing markers before watershed'
-    #qimshow(normmarkers)
-
-    watershed_input = cv2.cvtColor(saturation,cv2.COLOR_GRAY2RGB);
-    cv2.watershed(watershed_input, markers)
-
-    normmarkers = cv2.normalize(markers, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-    #print 'showing markers after watershed'
-    qimshow(normmarkers)
+def findsquares(scrumboard, image):
+    masked_image = scrumboard.mask_states(image, ('todo', 'done'))
+    qimshow(masked_image)
+    notepositions = findnotes(masked_image)
 
     squares = []
-    for i in xrange(n_comps):
-        singlecomponent = cv2.inRange(markers, i + 1, i + 1)
+    for pos in notepositions:
+        notebitmap = common.submatrix(image, pos[0], pos[1], common.NOTE_SIZE)
+        squares.append(Square(notebitmap, pos))
 
-        _, contours, _ = cv2.findContours(singlecomponent.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        norm = cv2.normalize(singlecomponent, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-        print 'showing single component %d' % i
-        #qimshow(norm)
-
-        if len(contours) != 0:
-            if len(contours) > 1:
-                # TODO: check if ignoring is the right thing to do
-                raise RuntimeError ("More than one (%d) external contour found for component %d. Not sure what to do with this. Ignoring component for now." % (len(contours), i))
-            else:
-                contour = contours[0]
-
-                center, radius = cv2.minEnclosingCircle(contour)
-
-                size = int(radius) * 2
-                singlecontour = common.submatrix(singlecomponent, center[0], center[1], size)
-                imagecutout = common.submatrix(image, center[0], center[1], size)
-
-                print 'showing singlecontour'
-                #qimshow(singlecontour)
-
-                try:
-                    angle, topleft, size, square_bitmap = find_largest_overlapping_square(singlecontour, imagecutout)
-                except NoMatchingSquareError:
-                    print 'no square'
-                    # continue with the next component
-                    continue
-                squares.append(Square(square_bitmap, center))
-
-                x = topleft[0]
-                y = topleft[1]
-                frame = np.zeros(singlecontour.shape, np.uint8)
-                cv2.rectangle(frame, (x,y), (x + size, y + size), 255, 1)
-                #qimshow(frame)
-
-                rotation = cv2.getRotationMatrix2D( (frame.shape[0] / 2, frame.shape[1] / 2), angle, 1.0)
-                rotatedframe = cv2.warpAffine(frame, rotation, frame.shape)
-                #qimshow(rotatedframe)
-
-                print 'showing imagecutout'
-                #qimshow(imagecutout)
-
-                rotatedframe = cv2.cvtColor( rotatedframe, cv2.COLOR_GRAY2BGR )
-                cutout_with_frame = cv2.addWeighted(imagecutout, 1.0, rotatedframe, 0.5, 0)
-                print 'showing imagecutout with frame'
-                qimshow(cutout_with_frame)
+        #qimshow(['found square', notebitmap])
 
     return squares
 
@@ -375,7 +284,7 @@ if __name__ == "__main__":
     image = webcam.grab()
 
     print 'showing grabbed image'
-    #qimshow(image)
+    qimshow(image)
 
     correctedimage, scaled_linepositions = common.correct_perspective(common.remove_color_cast(image, calibrationdata), calibrationdata, False)
 
@@ -389,25 +298,30 @@ if __name__ == "__main__":
 
     ciratefi = Ciratefi(correctedimage, common.NOTE_SIZE, debug=False)
 
+    maskedimage = correctedimage.copy()
+
     unidentified_notes = []
     for note in scrumboard.tasknotes:
         print 'Searching for task note previously in state %s' % note.state
-        qimshow([ ['Searching for task note previously in state %s' % note.state],
-                  [note.bitmap] ])
+        #qimshow([ ['Searching for task note previously in state %s' % note.state],
+        #          [note.bitmap] ])
         match = ciratefi.find(note.bitmap)
 
         if match:
+            common.masksubmatrix(maskedimage, match[0], match[1], common.NOTE_SIZE)
+
             newstate = scrumboard.get_state_from_position(match)
-            note.setstate(newstate)
-            print 'Task note found at %s. Updating state to %s' % (match, newstate)
-            qimshow([ ['Task note found at (%d,%d)' % match],
-                      [common.submatrix(correctedimage, match[0], match[1], common.NOTE_SIZE)] ])
+            if newstate != note.state:
+                note.setstate(newstate)
+                print 'Task note found at %s. Updating state to %s' % (match, newstate)
+            #qimshow([ ['Task note found at (%d,%d)' % match],
+            #          [common.submatrix(correctedimage, match[0], match[1], common.NOTE_SIZE)] ])
         else:
             print 'Task note not found'
             unidentified_notes.append(note)
 
     # identify any squares on the board
-    squares_in_photo = findsquares(correctedimage)
+    squares_in_photo = findsquares(scrumboard, maskedimage)
 
     # make a copy of the list of previously known task notes before we start adding new ones
     previously_known_tasknotes = copy.copy(scrumboard.tasknotes)

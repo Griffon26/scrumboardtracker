@@ -69,9 +69,6 @@ def findnotes(image):
 
     different_color_threshold = 31
 
-    common.qimshow(image)
-
-
     circle = createCircularKernel()
 
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)

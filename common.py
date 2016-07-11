@@ -44,6 +44,16 @@ def determine_copy_ranges(offset, source_size, dest_size):
 
     return src_start, src_end, dest_start, dest_end
 
+def masksubmatrix(bitmap_in, x, y, size):
+
+    x = int(x)
+    y = int(y)
+
+    src_row_start, src_row_end, _, _ = determine_copy_ranges(y - size / 2, bitmap_in.shape[0], size)
+    src_col_start, src_col_end, _, _ = determine_copy_ranges(x - size / 2, bitmap_in.shape[1], size)
+
+    bitmap_in[src_row_start:src_row_end, src_col_start:src_col_end, :] = 0
+
 def submatrix(bitmap_in, x, y, size):
 
     x = int(x)
