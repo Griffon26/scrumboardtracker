@@ -180,7 +180,7 @@ class ImageDialog(QDialog):
         for itemlist in images_and_text:
             hbox = QHBoxLayout()
             for item in itemlist:
-                if isinstance(item, str):
+                if isinstance(item, str) or isinstance(item, unicode):
                     hbox.addWidget(QLabel(item))
                 else:
                     hbox.addWidget(ImageLabel(item))

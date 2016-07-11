@@ -392,14 +392,16 @@ if __name__ == "__main__":
     unidentified_notes = []
     for note in scrumboard.tasknotes:
         print 'Searching for task note previously in state %s' % note.state
-        qimshow(note.bitmap, 'Searching for task note previously in state %s' % note.state)
+        qimshow([ ['Searching for task note previously in state %s' % note.state],
+                  [note.bitmap] ])
         match = ciratefi.find(note.bitmap)
 
         if match:
             newstate = scrumboard.get_state_from_position(match)
             note.setstate(newstate)
             print 'Task note found at %s. Updating state to %s' % (match, newstate)
-            qimshow(common.submatrix(correctedimage, match[0], match[1], common.NOTE_SIZE), 'Task note found at (%d,%d)' % match)
+            qimshow([ ['Task note found at (%d,%d)' % match],
+                      [common.submatrix(correctedimage, match[0], match[1], common.NOTE_SIZE)] ])
         else:
             print 'Task note not found'
             unidentified_notes.append(note)
@@ -428,7 +430,8 @@ if __name__ == "__main__":
         elif len(matches) == 1:
             newstate = scrumboard.get_state_from_position(square.position)
             matches[0].setstate(newstate)
-            qimshow([square.bitmap] + matches, 'Square with matching notes')
+            qimshow([ ['Square with matching notes'],
+                      [[square.bitmap] + matches] ])
         else: # len(matches) == 0
             scrumboard.add_tasknote(square)
 
