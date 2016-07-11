@@ -18,6 +18,7 @@
 
 import copy
 import cv2
+from datetime import datetime as dt
 import json
 import math
 import numpy as np
@@ -79,7 +80,7 @@ def findnotes(image):
     #common.qimshow(median)
     medianlab = cv2.cvtColor(median, cv2.COLOR_BGR2Lab)
 
-    different_color_threshold = 21
+    different_color_threshold = 31
 
     common.qimshow(image)
 
@@ -123,6 +124,7 @@ def findnotes(image):
         center, _ = cv2.minEnclosingCircle(contour)
         cv2.circle(annotatedimage, tuple(int(f) for f in center), common.NOTE_SIZE / 2, (255,0,255))
 
+    '''
     common.qimshow([ ['saturation', saturation],
                      #[sum_of_color_in_circle, normalized(sum_of_color_in_circle)],
                      #[color_dilated, normalized(color_dilated)],
@@ -131,7 +133,7 @@ def findnotes(image):
                      ['significant color', significant_color_mask, significant_color_image],
                      ['max color', max_color_mask, max_color_image],
                      ['found notes', annotatedimage] ])
-
+    '''
 
 
 
@@ -182,14 +184,27 @@ def findnotes(image):
                      ['mode_count', normalized(mode_count)] ])
     '''
 
+
+    before = dt.now()
+
     # 3-channel mode
     padsize = common.NOTE_SIZE / 2
 
+    color_absence = np.float32((1 - color) * different_color_threshold)
+    #color_absence = np.float32((1 - color))
+
     padded = np.pad(image, ((padsize, padsize), (padsize, padsize), (0,0)), 'constant')
     paddedlab = cv2.cvtColor(padded, cv2.COLOR_BGR2Lab)
-    b, g, r = cv2.split(paddedlab)
-    paddedmerged = np.uint32(b) * 256 * 256 + g * 256 + r
+    color_absence_padded = np.pad(color_absence, ((padsize, padsize), (padsize, padsize)), 'constant', constant_values = different_color_threshold)
 
+    h, w, c = padded.shape
+    paddedmerged = np.zeros((h, w, c + 1), dtype=np.uint8)
+    paddedmerged[:,:,:3] = paddedlab
+    paddedmerged[:,:,3] = color_absence_padded
+    paddedpacked = paddedmerged.view(np.uint32)
+
+    my_x = 431 - 350 #417 - 350
+    my_y = 716 #616 - 550
 
     circle_indices = np.where(circle != 0)
 
@@ -201,37 +216,122 @@ def findnotes(image):
         y_indices = circle_indices[0] + y_offset
         x_indices = circle_indices[1] + x_offset
 
-        colors = paddedmerged[(y_indices, x_indices)]
+        colors = paddedpacked[(y_indices, x_indices)]
         values, counts = np.unique(colors, return_counts=True)
         mode_packed = values[np.argmax(counts)]
-        mode = np.array([(mode_packed >> 16) & 255,
-                         (mode_packed >>  8) & 255,
-                         (mode_packed      ) & 255])
-        mode_filtered[y_offset][x_offset] = mode
 
-        lab_values = np.stack( (np.bitwise_and(np.right_shift(values, 16), 255),
-                                np.bitwise_and(np.right_shift(values, 8), 255),
-                                np.bitwise_and(values, 255)), axis = -1 )
-        absdiff = np.absolute(lab_values - mode)
+        mode = np.array([mode_packed], dtype=np.uint32).view(np.uint8)
+        lab_values = values.reshape((values.shape[0], 1)).view(np.uint8)
+        absdiff = np.absolute(np.float32(lab_values) - mode)
+
+        mode_filtered[y_offset][x_offset] = mode[:3]
+
         eucl_diffs = np.sqrt(np.sum(absdiff * absdiff, axis=1))
-        #count = len(eucl_diffs[eucl_diffs < different_color_threshold])
-        count = np.sum(counts[eucl_diffs < different_color_threshold])
+
+        if x_offset == my_x and y_offset == my_y:
+
+            print 'here we go'
+            print 'mode at (%d,%d) is %s' % (my_x, my_y, mode)
+
+            for count, value, diff in zip(counts[eucl_diffs <= different_color_threshold], lab_values[eucl_diffs <= different_color_threshold], eucl_diffs[eucl_diffs <= different_color_threshold]):
+                if value[3] > 20:
+                    print '%d matching pixels of value (%s) had distance of %f' % (count, value, diff)
+
+        count = np.sum(counts[eucl_diffs <= different_color_threshold])
 
         mode_count[y_offset][x_offset] = count
+
+        if x_offset == my_x and y_offset == my_y:
+
+            print 'mode_count', count
+            print 'absdiff', absdiff
+            print 'nr of circle pixels', len(circle_indices[0])
+
+            dinges = paddedpacked.copy()
+            for value in values[eucl_diffs <= different_color_threshold]:
+                dinges[paddedpacked == value] = 0
+            dinges2 = dinges.view(np.uint8)
+            dinges3 = np.zeros((dinges2.shape[0], dinges2.shape[1], dinges2.shape[2] - 1), dtype=np.uint8)
+            dinges3[:,:,:] = dinges2[:,:,:3]
+            dinges3= cv2.cvtColor(dinges3, cv2.COLOR_Lab2BGR)
+            common.qimshow(dinges3)
+
+
+            print 'mode_count', count
+
 
     minval, maxval, _, _ = cv2.minMaxLoc(mode_count)
     print 'mode_count ranges from %f to %f' % (minval, maxval)
 
+    after = dt.now()
+
+    print after - before
+
     common.qimshow(normalized(mode_count))
+
+    '''
+    print 'mode at (%d,%d) is %s' % (my_x, my_y, mode_filtered[my_y][my_x])
+
+    imagelab = image.copy()
+    #imagelab[significant_color_mask == 0] = (0,0,0)
+    imagelab = cv2.cvtColor(imagelab, cv2.COLOR_BGR2Lab)
+    mode_count2 = np.zeros(image.shape[:2], dtype=np.float32)
+
+
+    for y in range(common.NOTE_SIZE / 2, image.shape[0] - common.NOTE_SIZE / 2):
+        for x in range(common.NOTE_SIZE / 2, image.shape[1] - common.NOTE_SIZE / 2):
+            if significant_color_mask[y][x] == 0:
+                continue
+            one_mode = mode_filtered.copy()
+            one_mode[:] = one_mode[y][x]
+
+            absdiff = cv2.absdiff(imagelab, one_mode)
+            b, g, r = cv2.split(absdiff)
+            color_absence = np.float32((1 - color) * different_color_threshold)
+            norm = cv2.sqrt(np.float32(b) * b + np.float32(g) * g + np.float32(r) * r + color_absence * color_absence)
+
+            circle_indices = np.where(circle != 0)
+            x_indices = circle_indices[1] + x - common.NOTE_SIZE / 2
+            y_indices = circle_indices[0] + y - common.NOTE_SIZE / 2
+
+            outsidecircle = np.ones(mode_count2.shape, np.uint8)
+            outsidecircle[(y_indices, x_indices)] = 0
+
+            matchingpixels = np.zeros(mode_count2.shape, np.uint8)
+            matchingpixels[norm <= different_color_threshold] = 255
+            matchingpixels[outsidecircle == 1] = 0
+
+            if y == my_y and x == my_x:
+
+                import itertools
+                occurrences = {}
+                tuples = []
+                for rgb, dist in zip(imagelab[matchingpixels == 255], norm[matchingpixels == 255]):
+                    trgb = tuple(rgb)
+                    tuples.append(trgb)
+                    occurrences[trgb] = dist
+
+                for value, count in sorted([(g[0], len(list(g[1]))) for g in itertools.groupby(sorted(tuples))]):
+                    if count > 3:
+                        print '%d matching pixels of value (%d,%d,%d) had distance of %f' % (count, value[0], value[1], value[2], occurrences[value])
+
+            mode_count2[y][x] = cv2.countNonZero(matchingpixels)
+
+    print 'mode_count at (%d,%d) is %f, while mode_count2 is %f' % (my_x, my_y, mode_count[my_y][my_x], mode_count2[my_y][my_x])
+    common.qimshow([ ['real mode_count', mode_count / 2000],
+                     ['slow mode_count', mode_count2 / 2000] ])
+    '''
 
 
     '''
     # specific positions
-    for x, y in [ (48, 749), (35, 755), (33, 740), (44, 739), (56, 742), (54, 759) ]:
+    for x, y in [ (412, 621), (417, 616) ]:
+    #for x, y in [ (48, 749), (35, 755), (33, 740), (44, 739), (56, 742), (54, 759) ]:
     #for x, y in [ (441, 756), (1220, 587), (580, 644), (467, 756), (44, 750) ]:
     #for x, y in [ (346, 165), (234, 100), (344, 146) ]:
 
-        #y -= 600
+        x -= 350
+        y -= 550
 
         #one_mode = cv2.cvtColor(mode_filtered, cv2.COLOR_Lab2BGR)
         #one_mode = cv2.cvtColor(one_mode, cv2.COLOR_BGR2HSV)
@@ -240,21 +340,19 @@ def findnotes(image):
 
         imagelab = cv2.cvtColor(image, cv2.COLOR_BGR2Lab)
         imagelabcopy = imagelab.copy()
-        cv2.circle(imagelabcopy, (x,y), 5, (0,0,0))
+        cv2.circle(imagelabcopy, (x,y), 0, (255,0,0))
 
-        common.qimshow([ [cv2.cvtColor(mode_filtered, cv2.COLOR_Lab2BGR)],
+        mode_filtered_copy = mode_filtered.copy()
+        cv2.circle(mode_filtered_copy, (x,y), 0, (255,0,0))
+
+        common.qimshow([ [normalized(mode_count)],
+                         [cv2.cvtColor(mode_filtered_copy, cv2.COLOR_Lab2BGR)],
                          [cv2.cvtColor(one_mode, cv2.COLOR_Lab2BGR)],
                          [cv2.cvtColor(imagelabcopy, cv2.COLOR_Lab2BGR)] ])
         for thresh in range(different_color_threshold, different_color_threshold + 1):
             absdiff = cv2.absdiff(imagelab, one_mode)
             b, g, r = cv2.split(absdiff)
-            minval, maxval, _, _ = cv2.minMaxLoc(b)
-            print 'b ranges from %f to %f' % (minval, maxval)
-            minval, maxval, _, _ = cv2.minMaxLoc(g)
-            print 'g ranges from %f to %f' % (minval, maxval)
-            minval, maxval, _, _ = cv2.minMaxLoc(r)
-            print 'r ranges from %f to %f' % (minval, maxval)
-            norm = cv2.sqrt(np.float32(b) * b + g * g + r * r)
+            norm = cv2.sqrt(np.float32(b) * b + np.float32(g) * g + np.float32(r) * r)
             minval, maxval, _, _ = cv2.minMaxLoc(norm)
             print 'norm ranges from %f to %f' % (minval, maxval)
             retval, norm_limited = cv2.threshold(norm, thresh * 2, thresh * 2, cv2.THRESH_TRUNC)
@@ -262,8 +360,23 @@ def findnotes(image):
             print 'norm_limited ranges from %f to %f' % (minval, maxval)
 
             deviatingpixels = (norm > thresh).astype(np.float32)
+            deviatingpixelsrgb = np.uint8(cv2.cvtColor(deviatingpixels, cv2.COLOR_GRAY2BGR) * 255)
+            cv2.circle(deviatingpixelsrgb, (x,y), common.NOTE_SIZE / 2, (255,0,255))
+
+
+            circle_indices = np.where(circle != 0)
+            x_indices = circle_indices[1] + x - common.NOTE_SIZE / 2
+            y_indices = circle_indices[0] + y - common.NOTE_SIZE / 2
+            onlycircledeviation = np.ones(deviatingpixels.shape, deviatingpixels.dtype)
+            onlycircledeviation[(y_indices, x_indices)] = deviatingpixels[(y_indices, x_indices)]
+
+            inverted = np.zeros(deviatingpixels.shape, np.uint8)
+            inverted[onlycircledeviation == 0] = 255
+            print 'number of matching pixels is %d, mode_count for this pixel is %d' % (cv2.countNonZero(inverted), int(mode_count[y][x]))
+
             common.qimshow([ [normalized(norm_limited)],
-                             [deviatingpixels]])
+                             [normalized(onlycircledeviation)],
+                             [deviatingpixelsrgb] ])
     '''
 
 
@@ -282,7 +395,9 @@ def findnotes(image):
     annotatedimage = image.copy()
     for contour in contours:
         center, _ = cv2.minEnclosingCircle(contour)
-        cv2.circle(annotatedimage, tuple(int(f) for f in center), common.NOTE_SIZE / 2, (255,0,255))
+        count = mode_count[center[1]][center[0]]
+        if count > (2 * circleArea / 3):
+            cv2.circle(annotatedimage, tuple(int(f) for f in center), int((count / 2000) * common.NOTE_SIZE / 2), (255,0,255))
 
     common.qimshow([ [image, image],
                      [cv2.cvtColor(mode_filtered, cv2.COLOR_Lab2BGR), normalized(mode_count)],
@@ -396,5 +511,7 @@ if __name__ == '__main__':
 
     #notes = findnotes(image[0:200,650:900])
     #notes = findnotes(image[600:,0:100])
+    #notes = findnotes(image[550:700,350:500])
+    #notes = findnotes(image[:,350:550])
     notes = findnotes(image)
 
