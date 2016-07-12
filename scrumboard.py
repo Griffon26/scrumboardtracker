@@ -282,9 +282,10 @@ if __name__ == "__main__":
     image = webcam.grab()
 
     print 'showing grabbed image'
-    qimshow(image)
+    #qimshow(image)
 
     correctedimage, scaled_linepositions = common.correct_perspective(common.remove_color_cast(image, calibrationdata), calibrationdata, False)
+    qimshow(correctedimage)
 
     # The rest of this program should:
 
