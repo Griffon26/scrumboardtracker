@@ -142,11 +142,12 @@ def findnotes(image):
     positions = []
     for contour in contours:
         center, _ = cv2.minEnclosingCircle(contour)
+        intcenter = tuple(int(f) for f in center)
         count = mode_count[center[1]][center[0]]
         if count > (2 * circleArea / 3):
-            cv2.circle(annotatedimage, tuple(int(f) for f in center), int((count / 2000) * common.NOTE_SIZE / 2), (255,0,255))
-            cv2.circle(annotatedimage, tuple(int(f) for f in center), common.NOTE_SIZE / 2, (255,0,0))
-            positions.append(center)
+            cv2.circle(annotatedimage, intcenter, int((count / 2000) * common.NOTE_SIZE / 2), (255,0,255))
+            cv2.circle(annotatedimage, intcenter, common.NOTE_SIZE / 2, (255,0,0))
+            positions.append(intcenter)
 
     common.qimshow(annotatedimage)
 
