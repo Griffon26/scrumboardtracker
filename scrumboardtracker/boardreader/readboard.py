@@ -17,26 +17,6 @@
 
 
 
-#
-# The purpose of this program is to monitor a physical scrum board using a
-# webcam, identify task notes and track how they move across the board over
-# time. It does not need to read text on the notes, it only needs to recognize
-# each note as distinct from all the other notes.
-#
-# It should use the information about tasks to interface with a digital
-# scrumboard such as the one provided by jira and keep task states in sync with
-# the physical board.
-#
-# In order to interact with the digital scrumboard the application must know
-# which physical note corresponds to which task in e.g. jira. I haven't chosen
-# yet how to deal with this. I think the easiest way from a user perspective
-# would be to ask for the JIRA task ID whenever the task is first seen on the
-# board (i.e. identified as a square that doesn't match with any previously
-# seen squares). An alternative could be a step at the start of the sprint to
-# set up (assisted by the user) the initial links between physical notes and
-# digital tasks.
-#
-
 import copy
 import cv2
 import json
@@ -45,8 +25,7 @@ import os
 import sys
 
 from ciratefi import Ciratefi
-import common
-from common import qimshow
+import imagefuncs
 from findnotes import findnotes
 import webcam
 
@@ -68,15 +47,6 @@ class Scrumboard():
         self.linepositions = linepositions
         self.tasknotes = []
         self.states = ['todo', 'busy', 'blocked', 'in review', 'done']
-
-    def load_state_from_file(self):
-        if os.path.exists('scrumboardstate.json'):
-            with open('scrumboardstate.json', 'rb') as f:
-                self.from_serializable(json.load(f))
-
-    def save_state_to_file(self):
-        with open('scrumboardstate.json', 'wb') as f:
-            f.write(json.dumps(self.to_serializable()))
 
     def to_serializable(self):
         return { 'tasknotes' : [tasknote.to_serializable() for tasknote in self.tasknotes] }
@@ -136,137 +106,75 @@ class TaskNote():
     def find(self, image):
         return None
 
-def flatten(list_with_sublists):
-    return [item for sublist in list_with_sublists for item in sublist]
-
 def findsquares(scrumboard, image):
     _, end_of_todo = scrumboard.get_position_from_state('todo')
     start_of_done, _ = scrumboard.get_position_from_state('done')
 
     masked_image = image[:,end_of_todo:start_of_done,:]
-    qimshow(masked_image)
+    #imagefuncs.qimshow(masked_image)
     notepositions = findnotes(masked_image)
 
     squares = []
     for pos in notepositions:
-        notebitmap = common.submatrix(image, pos[0] + end_of_todo, pos[1], common.NOTE_SIZE)
+        notebitmap = imagefuncs.submatrix(image, pos[0] + end_of_todo, pos[1], imagefuncs.NOTE_SIZE)
         squares.append(Square(notebitmap, (pos[0] + end_of_todo, pos[1])))
 
-        #qimshow(['found square', notebitmap])
+        #imagefuncs.qimshow(['found square', notebitmap])
 
     return squares
 
-
-def find_largest_overlapping_square(singlecontour, imagecutout):
-
-    overallMax = 0
-
-    newcenter = (singlecontour.shape[0] / 2, singlecontour.shape[1] / 2)
-
-    for angle in xrange(-16,17):
-        rotation = cv2.getRotationMatrix2D(newcenter, angle, 1.0)
-        rotatedcontour = cv2.warpAffine(singlecontour, rotation, singlecontour.shape)
-
-        #qimshow(rotatedcontour)
-
-        offsetcontour = rotatedcontour.astype(np.float32) - 160
-
-        for kernel_size in [common.NOTE_SIZE]: #xrange(common.NOTE_SIZE, int(min(imagecutout.shape[0], common.NOTE_SIZE * 1.1))):
-            boxfiltered = cv2.boxFilter(offsetcontour, -1, (kernel_size, kernel_size), None, (0,0), False)
-
-            norm = cv2.normalize(boxfiltered, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
-            #qimshow(norm)
-
-
-            mask = np.zeros(boxfiltered.shape, np.uint8)
-            mask[0:boxfiltered.shape[0] - kernel_size + 1, 0:boxfiltered.shape[1] - kernel_size + 1] = 1
-
-            minVal, maxVal, _, maxLoc = cv2.minMaxLoc(boxfiltered, mask)
-
-            #print 'max is %s at angle %s and size %s' % (maxVal, angle, kernel_size)
-            if maxVal > overallMax:
-                overallMax = maxVal
-                overallMaxLoc = maxLoc
-                overallMaxAngle = angle
-                overallMaxKernelSize = kernel_size
-
-    bitmap = None
-    if overallMax > 0 and overallMaxKernelSize < common.NOTE_SIZE * 1.1:
-        rotation = cv2.getRotationMatrix2D(newcenter, overallMaxAngle, 1.0)
-        rotatedimagecutout = cv2.warpAffine(imagecutout, rotation, imagecutout.shape[0:2])
-        bitmap = rotatedimagecutout[overallMaxLoc[0]:overallMaxLoc[0] + overallMaxKernelSize, overallMaxLoc[1]:overallMaxLoc[1] + overallMaxKernelSize]
-
-        print 'showing largest overlapping square with score %s' % overallMax
-        #qimshow(bitmap)
-    else:
-        raise NoMatchingSquareError()
-
-    return -overallMaxAngle, overallMaxLoc, overallMaxKernelSize, bitmap
-
 def determine_average_colors(image):
 
-    diameter = int(common.NOTE_SIZE * 0.9)
+    diameter = int(imagefuncs.NOTE_SIZE * 0.9)
     circleKernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(diameter, diameter))
 
     kernelSize = cv2.countNonZero(circleKernel)
 
     averages = cv2.filter2D(image, -1, circleKernel.astype(np.float32) / kernelSize)
-    #qimshow(averages)
+    #imagefuncs.qimshow(averages)
     return averages
 
-# The basic algorithm for updating the scrumboard state from an image is this:
-# - find all known notes on the board and update their states
-#   - not finding them is ok if previously in todo or in done
-#   - otherwise warn about missing note
-# - identify squares, filter out all at positions of recognized known notes
-# - add remaining squares as new notes, show new notes to user
-# - warn about significant areas with color (outside todo/done) not covered by notes
-if __name__ == "__main__":
-
-    app = QtWidgets.QApplication(sys.argv)
-
+def readboard(previous_board_state):
     loadcalibrationdata()
     image = webcam.grab()
 
     #print 'Showing grabbed image'
-    #qimshow(image)
+    #imagefuncs.qimshow(image)
 
-    correctedimage, scaled_linepositions = common.correct_perspective(common.remove_color_cast(image, calibrationdata), calibrationdata, False)
-    qimshow(correctedimage)
-
-    # The rest of this program should:
+    correctedimage, scaled_linepositions = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, False)
+    #imagefuncs.qimshow(correctedimage)
 
     scrumboard = Scrumboard(scaled_linepositions)
+    scrumboard.from_serializable(json.loads(previous_board_state))
 
-    # read the known state of the board from file:
-    # (consists of bitmaps for all known notes and last known state for each)
-    scrumboard.load_state_from_file()
-
-    ciratefi = Ciratefi(correctedimage, common.NOTE_SIZE, debug=False)
+    ciratefi = Ciratefi(correctedimage, imagefuncs.NOTE_SIZE, debug=False)
 
     maskedimage = correctedimage.copy()
 
+    # find all known notes on the board and update their states
+    # - not finding them is ok if previously in todo or in done
+    # - otherwise warn about missing note (not implemented yet)
     unidentified_notes = []
     for note in scrumboard.tasknotes:
         #print 'Searching for task note previously in state %s' % note.state
-        #qimshow([ ['Searching for task note previously in state %s' % note.state],
+        #imagefuncs.qimshow([ ['Searching for task note previously in state %s' % note.state],
         #          [note.bitmap] ])
         match = ciratefi.find(note.bitmap)
 
         if match:
-            common.masksubmatrix(maskedimage, match[0], match[1], common.NOTE_SIZE)
+            imagefuncs.masksubmatrix(maskedimage, match[0], match[1], imagefuncs.NOTE_SIZE)
 
             newstate = scrumboard.get_state_from_position(match)
             if newstate != note.state:
                 note.setstate(newstate)
                 print >> sys.stderr, 'Task note found at %s. Updating state to %s' % (match, newstate)
-            #qimshow([ ['Task note found at (%d,%d)' % match],
-            #          [common.submatrix(correctedimage, match[0], match[1], common.NOTE_SIZE)] ])
+            #imagefuncs.qimshow([ ['Task note found at (%d,%d)' % match],
+            #          [imagefuncs.submatrix(correctedimage, match[0], match[1], imagefuncs.NOTE_SIZE)] ])
         else:
             print >> sys.stderr, 'Task note not found'
             unidentified_notes.append(note)
 
-    # identify any squares on the board
+    # identify any note-sized areas of significant color on the board
     squares_in_photo = findsquares(scrumboard, maskedimage)
     for square in squares_in_photo:
         state = scrumboard.get_state_from_position(square.position)
@@ -279,7 +187,17 @@ if __name__ == "__main__":
 
     averages = determine_average_colors(correctedimage)
 
-    scrumboard.save_state_to_file()
+    new_board_state = json.dumps(scrumboard.to_serializable())
 
+    return new_board_state
+
+if __name__ == "__main__":
+    scrumboardfile = 'scrumboardstate.json'
+    app = QtWidgets.QApplication(sys.argv)
+
+    with open(scrumboardfile, 'w+') as f:
+        old_state = f.read()
+        new_state = readboard(old_state)
+        f.write(new_state)
 
 

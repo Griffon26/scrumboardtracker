@@ -17,8 +17,24 @@ import cv2
 import os
 import subprocess as sp
 
+def get_this_filename():
+    import inspect
+    stack = inspect.stack()
+    _, filename, _, _, _, _ = stack[0]
+    return filename
+
 def grab():
-    sp.call('./capture.sh capture.jpg', shell=True)
-    image = cv2.imread("capture.jpg", 1);
-    os.remove('capture.jpg')
+    capturedir = os.path.expanduser('~/.scrumboardtracker')
+    capturefile = capturedir + '/capture.jpg'
+
+    try:
+        os.mkdir(capturedir)
+    except OSError:
+        pass
+
+    this_location = os.path.dirname(get_this_filename())
+
+    sp.call('%s/capture.sh %s' % (this_location, capturefile), shell=True)
+    image = cv2.imread(capturefile, 1);
+    os.remove(capturefile)
     return image

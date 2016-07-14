@@ -25,7 +25,7 @@ import numpy as np
 import os
 import sys
 
-import common
+import imagefuncs
 import webcam
 
 from PyQt5 import QtWidgets
@@ -50,7 +50,7 @@ def calculate_parameters_from_mat(stack_of_y):
     return mean_y, mean_corrected_y, mean_corrected_y_squared, mean_corrected_y_norm
 
 def createCircularKernel():
-    diameter = common.NOTE_SIZE
+    diameter = imagefuncs.NOTE_SIZE
     circleKernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(diameter, diameter))
     return circleKernel
 
@@ -84,7 +84,7 @@ def findnotes(image):
 
 
     # 3-channel mode
-    padsize = common.NOTE_SIZE / 2
+    padsize = imagefuncs.NOTE_SIZE / 2
 
     color_absence = np.float32((1 - color) * different_color_threshold)
 
@@ -124,9 +124,9 @@ def findnotes(image):
 
         mode_count[y_offset][x_offset] = count
 
-    #common.qimshow(normalized(mode_count))
+    #imagefuncs.qimshow(normalized(mode_count))
 
-    kernel = np.ones((common.NOTE_SIZE / 2, common.NOTE_SIZE / 2), np.uint8)
+    kernel = np.ones((imagefuncs.NOTE_SIZE / 2, imagefuncs.NOTE_SIZE / 2), np.uint8)
     similar_dilated = cv2.dilate(mode_count, kernel)
     local_max_at_zero = mode_count - similar_dilated
     local_max_mask = cv2.inRange(local_max_at_zero, 0.0, 1.0)
@@ -145,11 +145,11 @@ def findnotes(image):
         intcenter = tuple(int(f) for f in center)
         count = mode_count[center[1]][center[0]]
         if count > (2 * circleArea / 3):
-            cv2.circle(annotatedimage, intcenter, int((count / 2000) * common.NOTE_SIZE / 2), (255,0,255))
-            cv2.circle(annotatedimage, intcenter, common.NOTE_SIZE / 2, (255,0,0))
+            cv2.circle(annotatedimage, intcenter, int((count / 2000) * imagefuncs.NOTE_SIZE / 2), (255,0,255))
+            cv2.circle(annotatedimage, intcenter, imagefuncs.NOTE_SIZE / 2, (255,0,0))
             positions.append(intcenter)
 
-    common.qimshow(annotatedimage)
+    #imagefuncs.qimshow(annotatedimage)
 
     return positions
 
@@ -160,7 +160,7 @@ if __name__ == '__main__':
 
     with open('calibrationdata.json', 'rb') as f:
         calibrationdata = json.loads('\n'.join(f.readlines()))
-    image, _ = common.correct_perspective(common.remove_color_cast(image, calibrationdata), calibrationdata, False)
+    image, _ = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, False)
 
     notes = findnotes(image)
 

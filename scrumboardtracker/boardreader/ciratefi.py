@@ -24,7 +24,7 @@ import numpy as np
 import os
 import sys
 
-import common
+import imagefuncs
 
 from PyQt5 import QtWidgets
 
@@ -121,7 +121,7 @@ def remove_gradient(note):
 
     note_without_gradient = note - gradient + background
 
-    common.qimshow([ [note, gradient], [note_without_gradient, background] ])
+    #imagefuncs.qimshow([ [note, gradient], [note_without_gradient, background] ])
 
     return note_without_gradient
 
@@ -223,7 +223,7 @@ class Ciratefi:
 
         candidate_means = []
         for x, y in first_grade_candidates:
-            candidate = common.submatrix(self.board, x, y, self.notesize)
+            candidate = imagefuncs.submatrix(self.board, x, y, self.notesize)
             this_candidate_means = []
             for mask in rafi_masks:
                 this_candidate_means.append(cv2.mean(candidate, mask)[0])
@@ -277,7 +277,7 @@ class Ciratefi:
         for x, y, cshift in second_grade_candidates:
             for x2 in [x - 1, x, x + 1]:
                 for y2 in [y - 1, y, y + 1]:
-                    possible_match = common.submatrix(self.board, x2, y2, self.notesize)
+                    possible_match = imagefuncs.submatrix(self.board, x2, y2, self.notesize)
                     masked_possible_match = flatten_disc(possible_match, (self.notesize / 2, self.notesize / 2), self.notesize / 2)
                     corr = calculate_correlation(rotated_templates[cshift],
                                                  masked_possible_match,
@@ -293,18 +293,18 @@ class Ciratefi:
         if final_match[0] < self.settings['thresh_confidence']:
             if self.debug:
                 print 'no match was found. The best was at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
-                common.qimshow(common.submatrix(self.board, final_match[1], final_match[2], self.notesize))
+                imagefuncs.qimshow(imagefuncs.submatrix(self.board, final_match[1], final_match[2], self.notesize))
             return None
         else:
             if self.debug:
                 print 'final match is at (%d,%d) with correlation %f' % (final_match[1], final_match[2], final_match[0])
-                common.qimshow(common.submatrix(self.board, final_match[1], final_match[2], self.notesize))
+                imagefuncs.qimshow(imagefuncs.submatrix(self.board, final_match[1], final_match[2], self.notesize))
                 for corr, x, y in candidates_with_correlation:
                     diff_x = x - final_match[1]
                     diff_y = y - final_match[2]
                     if diff_x * diff_x + diff_y * diff_y > self.notesize * self.notesize:
                         print 'second best match is at (%d,%d) with correlation %f' % (x, y, corr)
-                        common.qimshow(common.submatrix(self.board, x, y, self.notesize))
+                        imagefuncs.qimshow(imagefuncs.submatrix(self.board, x, y, self.notesize))
                         break
 
             return final_match
@@ -318,7 +318,7 @@ class Ciratefi:
             cv2.circle(board_with_markers, (x, y), 1, (255, 0, 255))
 
         if self.debug:
-            common.qimshow(board_with_markers)
+            imagefuncs.qimshow(board_with_markers)
 
         second_grade_candidates = self._rafi(note, first_grade_candidates)
         for x, y, cshift in second_grade_candidates:
@@ -327,7 +327,7 @@ class Ciratefi:
             cv2.circle(board_with_markers, (x, y), 4, (255, 0, 0))
 
         if self.debug:
-            common.qimshow(board_with_markers)
+            imagefuncs.qimshow(board_with_markers)
 
         final_match = self._tefi(note, second_grade_candidates)
 
@@ -344,7 +344,7 @@ if __name__ == '__main__':
     board = cv2.imread('board.png')
     note = cv2.imread('note.png')
 
-    common.qimshow([note, board], 'searching for left image in right image')
+    imagefuncs.qimshow([note, board], 'searching for left image in right image')
 
     ciratefi = Ciratefi(board, note.shape[0], debug=True)
     match = ciratefi.find(note)

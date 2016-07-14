@@ -23,7 +23,7 @@ import numpy as np
 import sys
 import time
 
-import common
+import imagefuncs
 import webcam
 
 from PyQt5.QtCore import *
@@ -46,7 +46,7 @@ class BoardSelectionLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.draggedPoint == None:
             for i, p in enumerate(self.draggablePoints):
-                if common.eucldistance(p, (event.pos().x(), event.pos().y())) < 10:
+                if imagefuncs.eucldistance(p, (event.pos().x(), event.pos().y())) < 10:
                     self.draggedPoint = i
 
     def mouseMoveEvent(self, event):
@@ -83,7 +83,7 @@ class BoardSelectionLabel(QLabel):
 
     def redraw(self):
         image_with_corners = self.drawImageWithCorners(self.originalImage, self.draggablePoints)
-        pixmap = common.cvimage_to_qpixmap(image_with_corners)
+        pixmap = imagefuncs.cvimage_to_qpixmap(image_with_corners)
 	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
         self.setPixmap(pixmap)
 
@@ -149,7 +149,7 @@ class LaneSelectionLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.draggedLine == None:
             for i in (0, 1):
-                if common.eucldistance(self.noteCorners[i], (event.pos().x(), event.pos().y())) < 10:
+                if imagefuncs.eucldistance(self.noteCorners[i], (event.pos().x(), event.pos().y())) < 10:
                     self.draggedPoint = i
                     return
             for i, p in enumerate(self.linePositions):
@@ -207,7 +207,7 @@ class LaneSelectionLabel(QLabel):
 
     def redraw(self):
         image_with_lines = self.drawImageWithLines(self.originalImage, self.linePositions, self.noteCorners)
-        pixmap = common.cvimage_to_qpixmap(image_with_lines)
+        pixmap = imagefuncs.cvimage_to_qpixmap(image_with_lines)
 	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
         self.setPixmap(pixmap)
 
@@ -328,8 +328,8 @@ if __name__ == "__main__":
     xdiff_right, ydiff_right = abs_distance_per_axis(toppoint, rightpoint)
     xdiff_left, ydiff_left = abs_distance_per_axis(toppoint, leftpoint)
 
-    acos_left = math.acos(abs(xdiff_left) / common.eucldistance(leftpoint, toppoint))
-    acos_right = math.acos(abs(xdiff_right) / common.eucldistance(rightpoint, toppoint))
+    acos_left = math.acos(abs(xdiff_left) / imagefuncs.eucldistance(leftpoint, toppoint))
+    acos_right = math.acos(abs(xdiff_right) / imagefuncs.eucldistance(rightpoint, toppoint))
 
     print('top', toppoint)
     print('left', leftpoint)
@@ -362,7 +362,7 @@ if __name__ == "__main__":
     # Ask the user for the aspect ratio of the scrum board (needed for perspective correction)
     #
 
-    correctedimage, _ = common.correct_perspective(common.remove_color_cast(image, calibrationdata), calibrationdata, True)
+    correctedimage, _ = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, True)
 
 
     #
