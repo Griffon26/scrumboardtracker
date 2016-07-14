@@ -99,7 +99,7 @@ def correct_perspective(image, calibrationdata, fixedscale):
     correctedimage = cv2.warpPerspective(image, transformation, (width, height))
 
     if calibrationdata['linepositions']:
-        scaled_linepositions = [l * scale for l in calibrationdata['linepositions']]
+        scaled_linepositions = [int(l * scale) for l in calibrationdata['linepositions']]
     else:
         scaled_linepositions = None
 
