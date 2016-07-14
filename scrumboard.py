@@ -52,63 +52,10 @@ import webcam
 
 from PyQt5 import QtWidgets
 
-wndname = "Scrumboard"
 calibrationdata = None
 
 class NoMatchingSquareError(Exception):
     pass
-
-def waitforescape():
-    while 1:
-        k = cv2.waitKey(1) & 0xFF;
-        if k == 27:
-            break
-
-
-def remove_color_cast(image):
-    bgr_planes = cv2.split(image)
-
-    backgroundpos = calibrationdata['background']
-    average_bgr = image[backgroundpos[1]][backgroundpos[0]]
-    print 'bgr of scrumboard background:', average_bgr
-
-    for i in xrange(3):
-        thresh = average_bgr[i]
-        plane = bgr_planes[i]
-        print "Showing plane"
-        #qimshow(plane);
-
-        retval, mask = cv2.threshold(plane, thresh, 255, cv2.THRESH_BINARY);
-        print "Showing mask"
-        #qimshow(mask)
-
-        highvalues = (plane - thresh) * (128.0 / (255 - thresh)) + 128;
-        highvalues = highvalues.astype(np.uint8)
-
-        highvalues_masked = cv2.bitwise_and(highvalues, mask)
-        print "Showing scaled high values"
-        #qimshow(highvalues_masked)
-
-        mask = 255 - mask;
-        lowvalues = cv2.bitwise_and(plane, mask)
-        print "Showing low values"
-        #qimshow(lowvalues)
-
-        lowvalues = lowvalues * 128.0 / thresh
-        lowvalues = lowvalues.astype(np.uint8)
-        print "Showing scaled low values"
-        #qimshow(lowvalues)
-
-        bgr_planes[i] = lowvalues + highvalues_masked
-        print "Showing scaled plane"
-        #qimshow(bgr_planes[i])
-
-    correctedimage = cv2.merge(bgr_planes)
-    correctedimage = correctedimage.astype(np.uint8)
-    print "Showing corrected image"
-    #qimshow(correctedimage)
-
-    return correctedimage
 
 def loadcalibrationdata():
     global calibrationdata
@@ -281,7 +228,7 @@ if __name__ == "__main__":
     loadcalibrationdata()
     image = webcam.grab()
 
-    print 'showing grabbed image'
+    #print 'Showing grabbed image'
     #qimshow(image)
 
     correctedimage, scaled_linepositions = common.correct_perspective(common.remove_color_cast(image, calibrationdata), calibrationdata, False)
@@ -301,7 +248,7 @@ if __name__ == "__main__":
 
     unidentified_notes = []
     for note in scrumboard.tasknotes:
-        print 'Searching for task note previously in state %s' % note.state
+        #print 'Searching for task note previously in state %s' % note.state
         #qimshow([ ['Searching for task note previously in state %s' % note.state],
         #          [note.bitmap] ])
         match = ciratefi.find(note.bitmap)
@@ -312,18 +259,18 @@ if __name__ == "__main__":
             newstate = scrumboard.get_state_from_position(match)
             if newstate != note.state:
                 note.setstate(newstate)
-                print 'Task note found at %s. Updating state to %s' % (match, newstate)
+                print >> sys.stderr, 'Task note found at %s. Updating state to %s' % (match, newstate)
             #qimshow([ ['Task note found at (%d,%d)' % match],
             #          [common.submatrix(correctedimage, match[0], match[1], common.NOTE_SIZE)] ])
         else:
-            print 'Task note not found'
+            print >> sys.stderr, 'Task note not found'
             unidentified_notes.append(note)
 
     # identify any squares on the board
     squares_in_photo = findsquares(scrumboard, maskedimage)
     for square in squares_in_photo:
         state = scrumboard.get_state_from_position(square.position)
-        print 'New task note found at %s. Setting state to %s' % (square.position, state)
+        print >> sys.stderr, 'New task note found at %s. Setting state to %s' % (square.position, state)
         scrumboard.add_tasknote(square)
 
     # for any significant area of saturation that is not covered by
