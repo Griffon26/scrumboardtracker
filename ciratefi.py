@@ -99,7 +99,8 @@ def calculate_image_correlation(stack_of_x, stack_of_y, thresh_contrast, thresh_
 
     brightness_correction_factor = mean_y - contrast_correction_factor * mean_x
 
-    correlation_coef = (contrast_correction_factor * mean_corrected_x_squared) / (mean_corrected_x_norm * mean_corrected_y_norm)
+    with np.errstate(invalid='ignore'):
+        correlation_coef = (contrast_correction_factor * mean_corrected_x_squared) / (mean_corrected_x_norm * mean_corrected_y_norm)
 
     low_contrast_indices = abs(contrast_correction_factor) <= thresh_contrast
     high_contrast_indices = abs(contrast_correction_factor) >= (1.0 / thresh_contrast)
