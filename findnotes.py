@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-# Copyright 2014 Maurice van der Pot
+# Copyright 2016 Maurice van der Pot <griffon26@kfk4ever.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

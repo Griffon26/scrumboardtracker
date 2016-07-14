@@ -13,9 +13,7 @@ SUFFIX=${FILE##*.}
 if [ -e '/dev/video1' ]; then
   ~/git/v4l2grab/v4l2grab -d /dev/video1 -o "${FILE}" -W 1600 -H 1200
 else
-  #cp scrumboardphoto.jpg "${FILE}"
-  #cp board1.png "${FILE}"
-  cp combinedboard.png "${FILE}"
+  cp scrumboardphoto.jpg "${FILE}"
 fi
 
 #FILE_WITH_NUMBER=${PREFIX}-1
