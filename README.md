@@ -1,6 +1,6 @@
-# Scrumboard
+# ScrumBoardTracker
 
-This application allows you to use your physical scrum board as an interface to your digital scrumboard.
+This application allows you to use your physical scrum board as an interface to your digital scrum board.
 
 It tracks post-it notes on the physical board using a simple webcam and without significant restrictions
 on the notes or your way of working.
@@ -33,5 +33,5 @@ The algorithm for recognizing notes on a scrum board and finding them again in l
 
 # Known limitations
 
-* The scrumboard must be white, gray or black, while task notes must have other colors.
+* The scrum board must be white, gray or black, while task notes must have other colors.
 * Only square task notes are supported

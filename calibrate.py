@@ -359,7 +359,7 @@ if __name__ == "__main__":
 
 
     #
-    # Ask the user for the aspect ratio of the scrumboard (needed for perspective correction)
+    # Ask the user for the aspect ratio of the scrum board (needed for perspective correction)
     #
 
     correctedimage, _ = common.correct_perspective(common.remove_color_cast(image, calibrationdata), calibrationdata, True)
