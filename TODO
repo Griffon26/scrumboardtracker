@@ -1,10 +1,36 @@
-- take photos with a webcam (higher resolution than taking a frame from the video stream). Avoid lossy encoding if at all possible.
-- write build script
-	+include dependencies for numpy, opencv, python 2.7.
-- what to do with squares incorrectly found inside a large blob of notes
+- define main event loop
+  - wait for timer or user requests
+  - if timeout:
+    - spawn external process to update scrumboard state
+    - send old scrumboardstate on stdin, get new scrumboardstate (board photo, note bitmaps, note positions, note states) from stdout
+    - process changes in jira/...
+  - possible user requests:
+    - associate tasks
+    - reset scrumboard at beginning of sprint:
+      - reset scrumboard state
+      - make sure the outcome of any ongoing update will be ignored
 
-Sequence:
-* recognize squares
-* match with previously known squares
-* look for not matched previously known squares in photo
+- implement the image processing subprocess:
+  - get scrumboard state from stdin
+  - take pictures
+  - find all known notes
+  - find new notes
+  - update note states
+  - output scrumboard state to stdout
+
+- implement median/mode filtering for input pictures
+
+- detect when the board cannot be read and postpone processing (low-light conditions at night or people blocking the view)
+  - put a time limit on this (at it's ok to not update for hours, but during the day it should not take more than one hour, otherwise something is wrong)
+
+- define user interface (web interface? vnc? ...)
+
+- design UI for start of sprint actions (associating each note to a digital task)
+  - preferably use the same UI during the sprint when new notes are discovered
+
+- create plugin for interfacing with jira (retrieving stories/tasks, updating task state)
+
+- write build script
+	- include dependencies for numpy, opencv, python 2.7.
+
 
