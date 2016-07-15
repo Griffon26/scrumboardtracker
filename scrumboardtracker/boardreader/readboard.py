@@ -145,7 +145,8 @@ def readboard(previous_board_state):
     #imagefuncs.qimshow(correctedimage)
 
     scrumboard = Scrumboard(scaled_linepositions)
-    scrumboard.from_serializable(json.loads(previous_board_state))
+    if len(previous_board_state):
+        scrumboard.from_serializable(json.loads(previous_board_state))
 
     ciratefi = Ciratefi(correctedimage, imagefuncs.NOTE_SIZE, debug=False)
 
@@ -166,8 +167,10 @@ def readboard(previous_board_state):
 
             newstate = scrumboard.get_state_from_position(match)
             if newstate != note.state:
+                print >> sys.stderr, 'Task note found at %s, updating state from %s to %s' % (match, note.state, newstate)
                 note.setstate(newstate)
-                print >> sys.stderr, 'Task note found at %s. Updating state to %s' % (match, newstate)
+            else:
+                print >> sys.stderr, 'Task note found at %s, so state is still %s' % (match, newstate)
             #imagefuncs.qimshow([ ['Task note found at (%d,%d)' % match],
             #          [imagefuncs.submatrix(correctedimage, match[0], match[1], imagefuncs.NOTE_SIZE)] ])
         else:
@@ -195,9 +198,14 @@ if __name__ == "__main__":
     scrumboardfile = 'scrumboardstate.json'
     app = QtWidgets.QApplication(sys.argv)
 
-    with open(scrumboardfile, 'w+') as f:
-        old_state = f.read()
-        new_state = readboard(old_state)
-        f.write(new_state)
+    if os.path.exists(scrumboardfile):
+        with open(scrumboardfile, 'rb') as f:
+            old_state = f.read()
+    else:
+            old_state = ''
 
+    new_state = readboard(old_state)
+
+    with open(scrumboardfile, 'wb') as f:
+        f.write(new_state)
 

@@ -36,9 +36,8 @@
 from boardreader import readboard
 
 def main():
-    old_state = '{}'
-    new_state = readboard(old_state)
-    print new_state
+    old_state = ''
+    new_state = readboard.readboard(old_state)
 
 if __name__ == '__main__':
     main()
