@@ -33,11 +33,82 @@
 # digital tasks.
 #
 
+import os
+import sys
+from twisted.internet import error, protocol, reactor
+
 from boardreader import readboard
 
+class ProcessIOProtocol(protocol.ProcessProtocol):
+
+    def __init__(self, stdin, process_success_cb, process_failure_cb):
+        self.stdin = stdin
+        self.stdout = ''
+        self.stderr = ''
+        self.status = None
+
+        self.process_success_cb = process_success_cb
+        self.process_failure_cb = process_failure_cb
+
+    def connectionMade(self):
+        self.transport.write(self.stdin)
+        self.transport.closeStdin()
+
+    def outReceived(self, data):
+        self.stdout += data
+
+    def errReceived(self, data):
+        self.stderr += data
+
+    def processEnded(self, reason):
+        if isinstance(reason.value, error.ProcessDone):
+            self.process_success_cb(self.stdout, self.stderr)
+        else:
+            self.process_failure_cb(self.stdout, self.stderr)
+
+class ScrumBoardTracker():
+
+    def __init__(self):
+        self.scrumboardfile = 'scrumboardstate.json'
+        self.boardstate = ''
+
+    def schedule_timer(self):
+        print 'Scheduling next board update in 10 seconds'
+        reactor.callLater(10, self.startBoardReader)
+
+    def startBoardReader(self):
+        print 'Starting board update...'
+
+        brp = ProcessIOProtocol(self.boardstate, self.handleProcessOutput, self.handleProcessFailure)
+        reactor.spawnProcess(brp, sys.executable, [sys.executable, '-m', 'scrumboardtracker.boardreader'])
+
+    def handleProcessOutput(self, stdout, stderr):
+        self.boardstate = stdout
+
+        with open(self.scrumboardfile, 'wb') as f:
+            f.write(self.boardstate)
+
+        print 'Board state updated'
+
+        self.schedule_timer()
+
+    def handleProcessFailure(self, stdout, stderr):
+        print 'Board update process failed: stderr output was %s' % stderr
+
+        self.schedule_timer()
+
+    def run(self):
+        if os.path.exists(self.scrumboardfile):
+            with open(self.scrumboardfile, 'rb') as f:
+                self.boardstate = f.read()
+
+        self.startBoardReader()
+        reactor.run()
+
 def main():
-    old_state = ''
-    new_state = readboard.readboard(old_state)
+    tracker = ScrumBoardTracker()
+    tracker.run()
+
 
 if __name__ == '__main__':
     main()
