@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 # Copyright 2016 Maurice van der Pot <griffon26@kfk4ever.com>
 #
