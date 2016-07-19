@@ -144,7 +144,7 @@ class Ciratefi:
             'nr_of_radii' : 13,
             'nr_of_rotation_angles' : 36,
             'min_nr_of_first_grade_candidates' : 10,
-            'percentage_of_first_grade_candidates' : 0.1,
+            'percentage_of_first_grade_candidates' : 1,
             'min_nr_of_second_grade_candidates' : 10,
             'percentage_of_second_grade_candidates' : 1,
             'thresh_contrast' : 0.1,
@@ -345,8 +345,8 @@ class Ciratefi:
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
 
-    board = cv2.imread('board.png')
-    note = cv2.imread('note.png')
+    board = cv2.imread(sys.argv[1])
+    note = cv2.imread(sys.argv[2])
 
     imagefuncs.qimshow([ ['searching for left image in right image'],
                          [note, board] ])
