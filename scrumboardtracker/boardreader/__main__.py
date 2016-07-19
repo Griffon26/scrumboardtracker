@@ -17,6 +17,8 @@ import argparse
 import os
 import sys
 
+from PyQt5 import QtWidgets
+
 import readboard
 
 if __name__ == '__main__':
@@ -25,7 +27,11 @@ if __name__ == '__main__':
     parser.add_argument('filename', nargs='?', help='the JSON file containing the scrumboard state to be updated. ' +
                                                     'If this is not specified the original state is taken from stdin ' +
                                                     'and the updated state is written to stdout.')
+    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug prints and dialogs')
     args = parser.parse_args()
+
+    if args.debug:
+        app = QtWidgets.QApplication(sys.argv)
 
     if args.filename:
         if os.path.exists(args.filename):
@@ -36,7 +42,7 @@ if __name__ == '__main__':
     else:
         old_state = sys.stdin.read()
 
-    new_state = readboard.readboard(old_state)
+    new_state = readboard.readboard(old_state, debug=args.debug)
 
     if args.filename:
         with open(args.filename, 'wb') as f:
