@@ -44,6 +44,9 @@ from twisted.internet import error, protocol, reactor
 import board
 from boardreader import readboard
 
+# To make opencv2 compatible with the opencv3 API we use
+cv2.LINE_AA = cv2.CV_AA
+
 class ProcessIOProtocol(protocol.ProcessProtocol):
 
     def __init__(self, stdin, process_success_cb, process_failure_cb, print_stderr=False):

@@ -30,6 +30,9 @@ import webcam
 
 from PyQt5 import QtWidgets
 
+# To make opencv2 compatible with the opencv3 API we use
+cv2.COLOR_BGR2Lab = cv2.COLOR_BGR2LAB
+
 def calculate_parameters_from_mat(stack_of_y):
     weight = 1.0 / len(stack_of_y)
     yshape = stack_of_y[0].shape
@@ -136,7 +139,11 @@ def findnotes(image):
     temp = normalized(mode_count)
     temp[max_similarity_mask == 0] = 0
 
-    _, contours, _ = cv2.findContours(max_similarity_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    retvals = cv2.findContours(max_similarity_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if cv2.__version__.startswith('3'):
+        _, contours, _ = retvals
+    else:
+        contours, _ = retvals
 
     annotatedimage = image.copy()
     positions = []
