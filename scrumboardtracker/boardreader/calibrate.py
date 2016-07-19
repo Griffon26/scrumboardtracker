@@ -84,12 +84,12 @@ class BoardSelectionLabel(QLabel):
     def redraw(self):
         image_with_corners = self.drawImageWithCorners(self.originalImage, self.draggablePoints)
         pixmap = imagefuncs.cvimage_to_qpixmap(image_with_corners)
-	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
+        self.setGeometry(300, 300, pixmap.width(), pixmap.height())
         self.setPixmap(pixmap)
 
-            
+
 class BoardSelectionDialog(QDialog):
-    
+
     def __init__(self, image, points, aspectratio):
         super(BoardSelectionDialog, self).__init__()
 
@@ -100,7 +100,7 @@ class BoardSelectionDialog(QDialog):
         buttonBox.setOrientation(Qt.Horizontal)
         buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
         buttonBox.setObjectName("buttonBox")
-	
+
         vbox = QVBoxLayout()
         vbox.addWidget(label)
 
@@ -112,7 +112,7 @@ class BoardSelectionDialog(QDialog):
         self.heightEdit.setText(str(aspectratio[1]))
 
         hbox = QHBoxLayout()
-        
+
         hbox.addWidget(self.widthEdit)
         hbox.addWidget(self.heightEdit)
         hbox.addWidget(buttonBox)
@@ -208,12 +208,12 @@ class LaneSelectionLabel(QLabel):
     def redraw(self):
         image_with_lines = self.drawImageWithLines(self.originalImage, self.linePositions, self.noteCorners)
         pixmap = imagefuncs.cvimage_to_qpixmap(image_with_lines)
-	self.setGeometry(300, 300, pixmap.width(), pixmap.height())
+        self.setGeometry(300, 300, pixmap.width(), pixmap.height())
         self.setPixmap(pixmap)
 
- 
+
 class LaneSelectionDialog(QDialog):
-    
+
     def __init__(self, image, linePositions, noteCorners):
         super(LaneSelectionDialog, self).__init__()
 
@@ -224,7 +224,7 @@ class LaneSelectionDialog(QDialog):
         buttonBox.setOrientation(Qt.Horizontal)
         buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
         buttonBox.setObjectName("buttonBox")
-	
+
         vbox = QVBoxLayout()
         vbox.addWidget(label)
 
@@ -279,9 +279,29 @@ def saveCalibrationData():
     with open('calibrationdata.json', 'wb') as f:
         f.write(json.dumps(calibrationdata))
 
+def clamp_x_positions_to_board(list_of_x, board):
+    return [ min(int(x), board.shape[1]) for x in list_of_x ]
+
+def scale_x_positions(list_of_x, scalefactor):
+    return [ int(x * scalefactor) for x in list_of_x ]
+
 def clamp_points_to_board(points, board):
-    points = [ (min(x, board.shape[1]), min(y, board.shape[0])) for x,y in points ]
+    points = [ (min(int(x), board.shape[1]), min(int(y), board.shape[0])) for x,y in points ]
     return points
+
+def scale_points(points, scalefactor):
+    return [ (int(p[0] * scalefactor), int(p[1] * scalefactor)) for p in points ]
+
+def scale_to_fit_screen(image):
+    scalefactor = 1
+    screen_resolution = app.desktop().screenGeometry()
+    maxwidth, maxheight = screen_resolution.width(), screen_resolution.height()
+    while (image.shape[0] * scalefactor > maxheight - 10 or
+           image.shape[1] * scalefactor > maxwidth - 10):
+        scalefactor /= 2.0
+
+    downsized_image = cv2.resize(image, None , fx=scalefactor, fy=scalefactor)
+    return downsized_image, scalefactor
 
 if __name__ == "__main__":
 
@@ -297,14 +317,19 @@ if __name__ == "__main__":
 
     image = webcam.grab()
 
-    draggablePoints = clamp_points_to_board(draggablePoints, image)
+    downsized_image, scalefactor = scale_to_fit_screen(image)
 
-    dlg = BoardSelectionDialog(image, draggablePoints, calibrationdata['aspectratio'])
+    draggablePoints = scale_points(draggablePoints, scalefactor)
+    draggablePoints = clamp_points_to_board(draggablePoints, downsized_image)
+
+    dlg = BoardSelectionDialog(downsized_image, draggablePoints, calibrationdata['aspectratio'])
     if dlg.exec_() != 1:
         raise Exception('Calibration was aborted by the user')
 
     draggablePoints = dlg.getDraggablePoints()
+    draggablePoints = scale_points(draggablePoints, 1 / scalefactor)
     draggablePoints = clamp_points_to_board(draggablePoints, image)
+
     calibrationdata['corners'] = draggablePoints[0:4]
     calibrationdata['background'] = draggablePoints[4]
     calibrationdata['aspectratio'] = dlg.getAspectRatio()
@@ -364,6 +389,8 @@ if __name__ == "__main__":
 
     correctedimage, _ = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, True)
 
+    downscaled_correctedimage, scalefactor = scale_to_fit_screen(correctedimage)
+
 
     #
     # Let the user drag the lines separating todo, busy, blocked, in review and done columns
@@ -374,24 +401,32 @@ if __name__ == "__main__":
     linepositions = calibrationdata['linepositions']
     noteCorners = calibrationdata['notecorners']
 
-    linepositions = [ min(x, correctedimage.shape[1]) for x in linepositions ]
-    noteCorners = [ (min(x, correctedimage.shape[1]), min(y, correctedimage.shape[0])) for x, y in noteCorners ]
+    linepositions = scale_x_positions(linepositions, scalefactor)
+    linepositions = clamp_x_positions_to_board(linepositions, downscaled_correctedimage)
+
+    noteCorners = scale_points(noteCorners, scalefactor)
+    noteCorners = clamp_points_to_board(noteCorners, downscaled_correctedimage)
 
     if not linepositions:
-        linepositions = sorted([(correctedimage.shape[1] / (nr_of_lines + 1) * (i + 1)) for i in xrange(nr_of_lines)])
+        linepositions = sorted([(downscaled_correctedimage.shape[1] / (nr_of_lines + 1) * (i + 1)) for i in xrange(nr_of_lines)])
 
     if not noteCorners:
         noteCorners = [(10, 10), (50, 50)]
 
-    # make sure all lines are in view
-    linepositions = [min(linepos, correctedimage.shape[1] - 2) for linepos in linepositions]
-
-    dlg = LaneSelectionDialog(correctedimage, linepositions, noteCorners)
+    dlg = LaneSelectionDialog(downscaled_correctedimage, linepositions, noteCorners)
     if dlg.exec_() != 1:
         raise Exception('Calibration was aborted by the user')
 
-    calibrationdata['linepositions'] = dlg.getLinePositions()
-    calibrationdata['notecorners'] = dlg.getNoteCorners()
+    linepositions = dlg.getLinePositions()
+    linepositions = scale_x_positions(linepositions, 1 / scalefactor)
+    linepositions = clamp_x_positions_to_board(linepositions, correctedimage)
+
+    noteCorners = dlg.getNoteCorners()
+    noteCorners = scale_points(noteCorners, 1 / scalefactor)
+    noteCorners = clamp_points_to_board(noteCorners, correctedimage)
+
+    calibrationdata['linepositions'] = linepositions
+    calibrationdata['notecorners'] = noteCorners
     c1, c2 = calibrationdata['notecorners']
     calibrationdata['averagenotesize'] = (abs(c1[0] - c2[0]) + abs(c1[1] - c2[1])) / 2
 
