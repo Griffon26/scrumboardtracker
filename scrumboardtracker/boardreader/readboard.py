@@ -23,7 +23,7 @@ import os
 import sys
 
 from ciratefi import Ciratefi
-import scrumboardtracker.board
+import scrumboardtracker.board as board
 import imagefuncs
 from findnotes import findnotes
 import webcam
@@ -52,7 +52,7 @@ def findsquares(scrumboard, image):
     squares = []
     for pos in notepositions:
         notebitmap = imagefuncs.submatrix(image, pos[0] + end_of_todo, pos[1], imagefuncs.NOTE_SIZE)
-        squares.append(Square(notebitmap, (pos[0] + end_of_todo, pos[1])))
+        squares.append(board.Square(notebitmap, (pos[0] + end_of_todo, pos[1])))
 
         #imagefuncs.qimshow(['found square', notebitmap])
 
@@ -79,9 +79,11 @@ def readboard(previous_board_state):
     correctedimage, scaled_linepositions = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, False)
     #imagefuncs.qimshow(correctedimage)
 
-    scrumboard = Scrumboard(scaled_linepositions)
+    scrumboard = board.Scrumboard(scaled_linepositions)
     if len(previous_board_state):
         scrumboard.from_serializable(json.loads(previous_board_state))
+
+    scrumboard.set_bitmap(correctedimage)
 
     ciratefi = Ciratefi(correctedimage, imagefuncs.NOTE_SIZE, debug=False)
 
@@ -128,19 +130,4 @@ def readboard(previous_board_state):
     new_board_state = json.dumps(scrumboard.to_serializable())
 
     return new_board_state
-
-if __name__ == "__main__":
-    scrumboardfile = 'scrumboardstate.json'
-    app = QtWidgets.QApplication(sys.argv)
-
-    if os.path.exists(scrumboardfile):
-        with open(scrumboardfile, 'rb') as f:
-            old_state = f.read()
-    else:
-            old_state = ''
-
-    new_state = readboard(old_state)
-
-    with open(scrumboardfile, 'wb') as f:
-        f.write(new_state)
 
