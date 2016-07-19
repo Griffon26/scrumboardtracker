@@ -310,6 +310,10 @@ class Ciratefi:
             return final_match
 
     def find(self, note):
+
+        if self.debug:
+            imagefuncs.qimshow(['Looking for this note', note])
+
         board_with_markers = cv2.cvtColor(self.board, cv2.COLOR_GRAY2BGR)
         note = cv2.cvtColor(note, cv2.COLOR_BGR2GRAY)
 
@@ -344,7 +348,8 @@ if __name__ == '__main__':
     board = cv2.imread('board.png')
     note = cv2.imread('note.png')
 
-    imagefuncs.qimshow([note, board], 'searching for left image in right image')
+    imagefuncs.qimshow([ ['searching for left image in right image'],
+                         [note, board] ])
 
     ciratefi = Ciratefi(board, note.shape[0], debug=True)
     match = ciratefi.find(note)
