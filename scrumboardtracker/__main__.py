@@ -33,8 +33,11 @@
 # digital tasks.
 #
 
+import cv2
+from datetime import datetime
 import json
 import os
+from pprint import pprint
 import sys
 from twisted.internet import error, protocol, reactor
 
@@ -100,6 +103,14 @@ class ScrumBoardTracker():
         differences = updated_scrumboard.diff(self.scrumboard)
         self.scrumboard = updated_scrumboard
 
+
+        # Write board bitmap and differences to timestamped files in logs directory
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        with open('logs/%s_1_differences.txt' % timestamp, 'wb') as f:
+            pprint(differences, f)
+        cv2.imwrite('logs/%s_2_board.png' % timestamp, self.scrumboard.bitmap)
+
         print 'Board state updated, differences:', differences
 
         self.schedule_timer()
@@ -110,6 +121,12 @@ class ScrumBoardTracker():
         self.schedule_timer()
 
     def run(self):
+
+        try:
+            os.mkdir('logs')
+        except OSError:
+            pass
+
         if os.path.exists(self.scrumboardfile):
             with open(self.scrumboardfile, 'rb') as f:
                 boardstate = f.read()
