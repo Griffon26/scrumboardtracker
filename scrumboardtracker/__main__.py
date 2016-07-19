@@ -92,24 +92,39 @@ class ScrumBoardTracker():
         reactor.spawnProcess(brp, sys.executable, [sys.executable, '-m', 'scrumboardtracker.boardreader'])
 
     def handleProcessOutput(self, stdout, stderr):
-        boardstate = stdout
+        boardstate = json.loads(stdout)
 
-        with open(self.scrumboardfile, 'wb') as f:
-            f.write(boardstate)
+        # Write various data for debugging to timestamped files in the logs directory
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        with open('logs/%s_1_initial_board_state.json' % timestamp, 'wb') as f:
+            json.dump(self.scrumboard.to_serializable(), f)
 
         updated_scrumboard = board.Scrumboard()
-        updated_scrumboard.from_serializable(json.loads(boardstate))
+        updated_scrumboard.from_serializable(boardstate)
 
         differences = updated_scrumboard.diff(self.scrumboard)
         self.scrumboard = updated_scrumboard
 
 
-        # Write board bitmap and differences to timestamped files in logs directory
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-        with open('logs/%s_1_differences.txt' % timestamp, 'wb') as f:
+        with open('logs/%s_2_differences.txt' % timestamp, 'wb') as f:
             pprint(differences, f)
-        cv2.imwrite('logs/%s_2_board.png' % timestamp, self.scrumboard.bitmap)
+
+        cv2.imwrite('logs/%s_3_board.png' % timestamp, self.scrumboard.bitmap)
+
+        annotated_bitmap = self.scrumboard.bitmap.copy()
+        for note in self.scrumboard.tasknotes:
+            text_size, baseline = cv2.getTextSize(str(note.taskid), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            x = note.position[0] - text_size[0] / 2
+            y = note.position[1] + text_size[1] / 2
+            cv2.putText(annotated_bitmap, str(note.taskid), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), thickness=1, lineType=cv2.LINE_AA)
+        cv2.imwrite('logs/%s_4_annotated_board.png' % timestamp, annotated_bitmap)
+
+        # Before saving board state to json, remove the bitmap because it is
+        # very large and not used when read from file
+        boardstate['bitmap'] = []
+        with open(self.scrumboardfile, 'wb') as f:
+            f.write(json.dumps(boardstate))
 
         print 'Board state updated, differences:', differences
 
