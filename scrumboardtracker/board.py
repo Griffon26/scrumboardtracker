@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
+import itertools
 
 class Square():
     def __init__(self, bitmap, position):
@@ -43,9 +44,9 @@ class TaskNote():
         self.state = newstate
 
 class Scrumboard():
-    def __init__(self, linepositions):
+    def __init__(self, linepositions=None):
         self.linepositions = linepositions
-        self.bitmap = None
+        self.bitmap = np.array([])
         self.tasknotes = []
         self.states = ['todo', 'busy', 'blocked', 'in review', 'done']
 
@@ -82,3 +83,10 @@ class Scrumboard():
         self.tasknotes.append(tasknote)
         return tasknote
 
+    def diff(self, otherboard):
+        differences = {}
+        for i, states in enumerate(itertools.izip_longest((note.state for note in otherboard.tasknotes),
+                                                          (note.state for note in self.tasknotes))):
+            if states[0] != states[1]:
+                differences[i] = states
+        return differences

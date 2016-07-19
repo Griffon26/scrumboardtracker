@@ -33,19 +33,22 @@
 # digital tasks.
 #
 
+import json
 import os
 import sys
 from twisted.internet import error, protocol, reactor
 
+import board
 from boardreader import readboard
 
 class ProcessIOProtocol(protocol.ProcessProtocol):
 
-    def __init__(self, stdin, process_success_cb, process_failure_cb):
+    def __init__(self, stdin, process_success_cb, process_failure_cb, print_stderr=False):
         self.stdin = stdin
         self.stdout = ''
         self.stderr = ''
         self.status = None
+        self.print_stderr = print_stderr
 
         self.process_success_cb = process_success_cb
         self.process_failure_cb = process_failure_cb
@@ -59,6 +62,8 @@ class ProcessIOProtocol(protocol.ProcessProtocol):
 
     def errReceived(self, data):
         self.stderr += data
+        if self.print_stderr:
+            sys.stderr.write(data)
 
     def processEnded(self, reason):
         if isinstance(reason.value, error.ProcessDone):
@@ -70,7 +75,7 @@ class ScrumBoardTracker():
 
     def __init__(self):
         self.scrumboardfile = 'scrumboardstate.json'
-        self.boardstate = ''
+        self.scrumboard = board.Scrumboard()
 
     def schedule_timer(self):
         print 'Scheduling next board update in 10 seconds'
@@ -79,16 +84,23 @@ class ScrumBoardTracker():
     def startBoardReader(self):
         print 'Starting board update...'
 
-        brp = ProcessIOProtocol(self.boardstate, self.handleProcessOutput, self.handleProcessFailure)
+        boardstate = json.dumps(self.scrumboard.to_serializable())
+        brp = ProcessIOProtocol(boardstate, self.handleProcessOutput, self.handleProcessFailure, print_stderr=True)
         reactor.spawnProcess(brp, sys.executable, [sys.executable, '-m', 'scrumboardtracker.boardreader'])
 
     def handleProcessOutput(self, stdout, stderr):
-        self.boardstate = stdout
+        boardstate = stdout
 
         with open(self.scrumboardfile, 'wb') as f:
-            f.write(self.boardstate)
+            f.write(boardstate)
 
-        print 'Board state updated'
+        updated_scrumboard = board.Scrumboard()
+        updated_scrumboard.from_serializable(json.loads(boardstate))
+
+        differences = updated_scrumboard.diff(self.scrumboard)
+        self.scrumboard = updated_scrumboard
+
+        print 'Board state updated, differences:', differences
 
         self.schedule_timer()
 
@@ -100,7 +112,10 @@ class ScrumBoardTracker():
     def run(self):
         if os.path.exists(self.scrumboardfile):
             with open(self.scrumboardfile, 'rb') as f:
-                self.boardstate = f.read()
+                boardstate = f.read()
+
+            if len(boardstate) > 0:
+                self.scrumboard.from_serializable(json.loads(boardstate))
 
         self.startBoardReader()
         reactor.run()
