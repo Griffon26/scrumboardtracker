@@ -28,19 +28,24 @@ class Square():
         return False
 
 class TaskNote():
-    def __init__(self, bitmap, state):
+    def __init__(self, taskid, bitmap, position, state):
+        self.taskid = taskid
         self.bitmap = bitmap
+        self.position = position
         self.state = state
 
     def to_serializable(self):
-        return { 'state' : self.state,
-                 'bitmap' : self.bitmap.tolist() }
+        return { 'bitmap' : self.bitmap.tolist(),
+                 'position' : self.position,
+                 'state' : self.state }
 
     def from_serializable(self, data):
-        self.state = data['state']
         self.bitmap = np.array(data['bitmap'], dtype=np.uint8)
+        self.state = data['state']
+        self.position = data['position']
 
-    def setstate(self, newstate):
+    def _setstate(self, newposition, newstate):
+        self.position = newposition
         self.state = newstate
 
 class Scrumboard():
@@ -58,7 +63,7 @@ class Scrumboard():
         self.bitmap = np.array(data['bitmap'], dtype=np.uint8)
         self.tasknotes = []
         for tasknote_data in data['tasknotes']:
-            tasknote = TaskNote(None, None)
+            tasknote = TaskNote(len(self.tasknotes), None, None, None)
             tasknote.from_serializable(tasknote_data)
             self.tasknotes.append(tasknote)
 
@@ -79,9 +84,14 @@ class Scrumboard():
 
     def add_tasknote(self, square):
         state = self.get_state_from_position(square.position)
-        tasknote = TaskNote(square.bitmap, state)
+        tasknote = TaskNote(len(self.tasknotes), square.bitmap, square.position, state)
         self.tasknotes.append(tasknote)
         return tasknote
+
+    def move_tasknote(self, tasknote, newposition):
+        newstate = self.get_state_from_position(newposition)
+        self.tasknotes[tasknote.taskid]._setstate(newposition, newstate)
+        return newstate
 
     def diff(self, otherboard):
         differences = {}

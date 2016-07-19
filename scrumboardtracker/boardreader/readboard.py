@@ -69,7 +69,7 @@ def determine_average_colors(image):
     #imagefuncs.qimshow(averages)
     return averages
 
-def readboard(previous_board_state):
+def readboard(previous_board_state, debug=False):
     loadcalibrationdata()
     image = webcam.grab()
 
@@ -85,7 +85,7 @@ def readboard(previous_board_state):
 
     scrumboard.set_bitmap(correctedimage)
 
-    ciratefi = Ciratefi(correctedimage, imagefuncs.NOTE_SIZE, debug=False)
+    ciratefi = Ciratefi(correctedimage, imagefuncs.NOTE_SIZE, debug=debug)
 
     maskedimage = correctedimage.copy()
 
@@ -102,12 +102,13 @@ def readboard(previous_board_state):
         if match:
             imagefuncs.masksubmatrix(maskedimage, match[0], match[1], imagefuncs.NOTE_SIZE)
 
-            newstate = scrumboard.get_state_from_position(match)
-            if newstate != note.state:
-                print >> sys.stderr, 'Task note found at %s, updating state from %s to %s' % (match, note.state, newstate)
-                note.setstate(newstate)
+            oldstate = note.state
+            oldposition = note.position
+            newstate = scrumboard.move_tasknote(note, match)
+            if newstate != oldstate:
+                print >> sys.stderr, 'Task note %d found at %s (previously at %s), updating state from %s to %s' % (note.taskid, match, oldposition, oldstate, newstate)
             else:
-                print >> sys.stderr, 'Task note found at %s, so state is still %s' % (match, newstate)
+                print >> sys.stderr, 'Task note %d found at %s (previously at %s), so state is still %s' % (note.taskid, match, oldposition, newstate)
             #imagefuncs.qimshow([ ['Task note found at (%d,%d)' % match],
             #          [imagefuncs.submatrix(correctedimage, match[0], match[1], imagefuncs.NOTE_SIZE)] ])
         else:
@@ -118,8 +119,8 @@ def readboard(previous_board_state):
     squares_in_photo = findsquares(scrumboard, maskedimage)
     for square in squares_in_photo:
         state = scrumboard.get_state_from_position(square.position)
-        print >> sys.stderr, 'New task note found at %s. Setting state to %s' % (square.position, state)
-        scrumboard.add_tasknote(square)
+        tasknote = scrumboard.add_tasknote(square)
+        print >> sys.stderr, 'New task note found at %s. New task %d created with state %s' % (tasknote.position, tasknote.taskid, tasknote.state)
 
     # for any significant area of saturation that is not covered by
     # recognized squares, give a warning & highlight that it looks like a bunch of notes
