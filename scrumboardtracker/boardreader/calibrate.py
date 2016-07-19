@@ -239,7 +239,7 @@ class LaneSelectionDialog(QDialog):
         self.noteCorners = noteCorners
 
     def getLinePositions(self):
-        return self.linePositions
+        return sorted(self.linePositions)
 
     def getNoteCorners(self):
         return self.noteCorners
