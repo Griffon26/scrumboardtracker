@@ -86,10 +86,13 @@ def get_scrumboard_photo():
 
     return image
 
-def readboard(previous_board_state, debug=False):
+def readboard(previous_board_state, imagefile=None, debug=False):
     loadcalibrationdata()
 
-    image = get_scrumboard_photo()
+    if imagefile:
+        image = cv2.imread(imagefile)
+    else:
+        image = get_scrumboard_photo()
 
     correctedimage, scaled_linepositions = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, False)
     #imagefuncs.qimshow(correctedimage)

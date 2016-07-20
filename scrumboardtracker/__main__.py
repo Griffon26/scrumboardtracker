@@ -127,8 +127,10 @@ class ScrumBoardTracker():
         # Before saving board state to json, remove the bitmap because it is
         # very large and not used when read from file
         boardstate['bitmap'] = []
-        with open(self.scrumboardfile, 'wb') as f:
-            f.write(json.dumps(boardstate))
+        with open(self.scrumboardfile, 'wb') as f1, \
+             open('logs/%s_5_final_board_state.json' % timestamp, 'wb') as f2:
+            json.dump(boardstate, f1)
+            json.dump(boardstate, f2)
 
         print 'Board state updated, differences:', differences
 

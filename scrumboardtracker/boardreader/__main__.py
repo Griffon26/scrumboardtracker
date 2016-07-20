@@ -24,29 +24,23 @@ import readboard
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Update the scrumboard state using a webcam')
-    parser.add_argument('filename', nargs='?', help='the JSON file containing the scrumboard state to be updated. ' +
-                                                    'If this is not specified the original state is taken from stdin ' +
-                                                    'and the updated state is written to stdout.')
+    parser.add_argument('-i', '--image', help='A photo of the scrumboard to process. ' +
+                                              'If this is not specified an image is captured using a webcam.')
+    parser.add_argument('-si', '--stateinput', type=argparse.FileType('r'),
+                                               default=sys.stdin,
+                                               help='The JSON file containing the initial scrumboard state. ' +
+                                                    'If this is not specified the original state is taken from stdin.')
+    parser.add_argument('-so', '--stateoutput', type=argparse.FileType('w'),
+                                                default=sys.stdout,
+                                                help='The file that the scrumboard state should be written to. ' +
+                                                     'If this is not specified the updated state is written to stdout.')
     parser.add_argument('-d', '--debug', action='store_true', help='Enable debug prints and dialogs')
     args = parser.parse_args()
 
     if args.debug:
         app = QtWidgets.QApplication(sys.argv)
 
-    if args.filename:
-        if os.path.exists(args.filename):
-            with open(args.filename, 'rb') as f:
-                old_state = f.read()
-        else:
-                old_state = ''
-    else:
-        old_state = sys.stdin.read()
-
-    new_state = readboard.readboard(old_state, debug=args.debug)
-
-    if args.filename:
-        with open(args.filename, 'wb') as f:
-            f.write(new_state)
-    else:
-        sys.stdout.write(new_state + '\n')
+    old_state = args.stateinput.read()
+    new_state = readboard.readboard(old_state, imagefile=args.image, debug=args.debug)
+    args.stateoutput.write(new_state + '\n')
 
