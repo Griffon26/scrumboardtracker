@@ -146,7 +146,7 @@ class Ciratefi:
             'min_nr_of_first_grade_candidates' : 10,
             'percentage_of_first_grade_candidates' : 1,
             'min_nr_of_second_grade_candidates' : 10,
-            'percentage_of_second_grade_candidates' : 1,
+            'percentage_of_second_grade_candidates' : 10,
             'thresh_contrast' : 0.1,
             'thresh_brightness' : 255.0,
             'thresh_confidence' : 0.5
