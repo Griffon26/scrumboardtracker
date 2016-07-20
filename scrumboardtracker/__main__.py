@@ -85,7 +85,7 @@ class ScrumBoardTracker():
         self.scrumboard = board.Scrumboard()
 
     def schedule_timer(self):
-        print 'Scheduling next board update in 10 seconds'
+        print 'Scheduling next board update in 10 seconds...\n'
         reactor.callLater(10, self.startBoardReader)
 
     def startBoardReader(self):
@@ -132,7 +132,7 @@ class ScrumBoardTracker():
             json.dump(boardstate, f1)
             json.dump(boardstate, f2)
 
-        print 'Board state updated, differences:', differences
+        print 'Board state updated (see logs/%s_*)' % timestamp
 
         self.schedule_timer()
 
