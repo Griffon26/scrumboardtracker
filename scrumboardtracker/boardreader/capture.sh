@@ -9,9 +9,12 @@ FILE=$1
 PREFIX=${FILE%%.*}
 SUFFIX=${FILE##*.}
 
+VIDEO_DEVICE="/dev/video0"
 
-if [ -e '/dev/video1' ]; then
-  ~/git/v4l2grab/v4l2grab -d /dev/video1 -o "${FILE}" -W 1600 -H 1200
+if command -v raspistill > /dev/null; then
+  raspistill -n -v -t 1000 -rot 180 -e png -o "${FILE}"
+elif [ -e "${VIDEO_DEVICE}" ]; then
+  ~/git/v4l2grab/v4l2grab -d "${VIDEO_DEVICE}" -o "${FILE}" -W 1600 -H 1200
 else
   cp scrumboardphoto.jpg "${FILE}"
 fi
