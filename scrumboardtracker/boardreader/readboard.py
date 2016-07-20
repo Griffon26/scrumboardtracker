@@ -90,6 +90,27 @@ def get_scaled_linepositions(calibdata):
     scaled_linepositions = [int(l * scale) for l in calibdata['linepositions']]
     return scaled_linepositions
 
+def get_coordinate_order(coords):
+    maxdiff = imagefuncs.NOTE_SIZE / 2
+    order = {}
+    currentclass = None
+    for c in sorted(coords):
+        if not currentclass or c > currentclass + maxdiff:
+            currentclass = c
+        order[c] = currentclass
+
+    return order
+
+def sort_squares_by_approximate_position(squares):
+    x_coords, y_coords = zip(*(s.position for s in squares))
+    x_order = get_coordinate_order(x_coords)
+    y_order = get_coordinate_order(y_coords)
+
+    def sortkey(square):
+        return (y_order[square.position[1]], x_order[square.position[0]])
+
+    return sorted(squares, key=sortkey)
+
 def readboard(previous_board_state, imagefile=None, debug=False):
     loadcalibrationdata()
 
@@ -136,11 +157,12 @@ def readboard(previous_board_state, imagefile=None, debug=False):
             #imagefuncs.qimshow([ ['Task note found at (%d,%d)' % match],
             #          [imagefuncs.submatrix(correctedimage, match[0], match[1], imagefuncs.NOTE_SIZE)] ])
         else:
-            print >> sys.stderr, 'Task note not found'
+            print >> sys.stderr, 'Task note %d (previously at %s in state %s) not found' % (note.taskid, note.position, note.state)
             unidentified_notes.append(note)
 
     # identify any note-sized areas of significant color on the board
     squares_in_photo = findsquares(scrumboard, maskedimage)
+    squares_in_photo = sort_squares_by_approximate_position(squares_in_photo)
     for square in squares_in_photo:
         state = scrumboard.get_state_from_position(square.position)
         tasknote = scrumboard.add_tasknote(square)
