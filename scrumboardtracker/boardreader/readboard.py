@@ -69,12 +69,27 @@ def determine_average_colors(image):
     #imagefuncs.qimshow(averages)
     return averages
 
-def readboard(previous_board_state, debug=False):
-    loadcalibrationdata()
-    image = webcam.grab()
+def get_scrumboard_photo():
+
+    nr_of_images = 8
+    raw_images = []
+
+    for i in range(nr_of_images):
+        raw_images.append(webcam.grab())
+
+    image = np.zeros(raw_images[0].shape, raw_images[0].dtype)
+    for i in range(nr_of_images):
+        image = cv2.addWeighted(image, 1, raw_images[i], 1.0 / nr_of_images, 0)
 
     #print 'Showing grabbed image'
     #imagefuncs.qimshow(image)
+
+    return image
+
+def readboard(previous_board_state, debug=False):
+    loadcalibrationdata()
+
+    image = get_scrumboard_photo()
 
     correctedimage, scaled_linepositions = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, False)
     #imagefuncs.qimshow(correctedimage)
