@@ -31,7 +31,8 @@ import webcam
 from PyQt5 import QtWidgets
 
 # To make opencv2 compatible with the opencv3 API we use
-cv2.COLOR_BGR2Lab = cv2.COLOR_BGR2LAB
+if cv2.__version__.startswith('2'):
+    cv2.COLOR_BGR2Lab = cv2.COLOR_BGR2LAB
 
 def calculate_parameters_from_mat(stack_of_y):
     weight = 1.0 / len(stack_of_y)

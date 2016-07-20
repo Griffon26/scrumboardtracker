@@ -45,7 +45,8 @@ import board
 from boardreader import readboard
 
 # To make opencv2 compatible with the opencv3 API we use
-cv2.LINE_AA = cv2.CV_AA
+if cv2.__version__.startswith('2'):
+    cv2.LINE_AA = cv2.CV_AA
 
 class ProcessIOProtocol(protocol.ProcessProtocol):
 
