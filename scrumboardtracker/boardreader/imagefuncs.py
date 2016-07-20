@@ -98,12 +98,7 @@ def correct_perspective(image, calibrationdata, fixedscale):
     transformation = cv2.getPerspectiveTransform(orderedcorners, correctedrectangle)
     correctedimage = cv2.warpPerspective(image, transformation, (width, height))
 
-    if calibrationdata['linepositions']:
-        scaled_linepositions = [int(l * scale) for l in calibrationdata['linepositions']]
-    else:
-        scaled_linepositions = None
-
-    return correctedimage, scaled_linepositions
+    return correctedimage
 
 def remove_color_cast(image, calibrationdata):
     bgr_planes = cv2.split(image)

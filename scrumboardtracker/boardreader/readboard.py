@@ -86,16 +86,23 @@ def get_scrumboard_photo():
 
     return image
 
+def get_scaled_linepositions(calibdata):
+    scale = (1.0 * imagefuncs.NOTE_SIZE) / calibdata['averagenotesize']
+    scaled_linepositions = [int(l * scale) for l in calibdata['linepositions']]
+    return scaled_linepositions
+
 def readboard(previous_board_state, imagefile=None, debug=False):
     loadcalibrationdata()
 
     if imagefile:
-        image = cv2.imread(imagefile)
+        correctedimage = cv2.imread(imagefile)
     else:
         image = get_scrumboard_photo()
+        correctedimage = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, False)
 
-    correctedimage, scaled_linepositions = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, False)
     #imagefuncs.qimshow(correctedimage)
+
+    scaled_linepositions = get_scaled_linepositions(calibrationdata)
 
     scrumboard = board.Scrumboard(scaled_linepositions)
     if len(previous_board_state):
