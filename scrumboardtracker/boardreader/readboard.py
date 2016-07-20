@@ -42,17 +42,16 @@ def loadcalibrationdata():
         calibrationdata = json.loads('\n'.join(f.readlines()))
 
 def findsquares(scrumboard, image):
-    _, end_of_todo = scrumboard.get_position_from_state('todo')
     start_of_done, _ = scrumboard.get_position_from_state('done')
 
-    masked_image = image[:,end_of_todo:start_of_done,:]
+    masked_image = image[:,:start_of_done,:]
     #imagefuncs.qimshow(masked_image)
     notepositions = findnotes(masked_image)
 
     squares = []
     for pos in notepositions:
-        notebitmap = imagefuncs.submatrix(image, pos[0] + end_of_todo, pos[1], imagefuncs.NOTE_SIZE)
-        squares.append(board.Square(notebitmap, (pos[0] + end_of_todo, pos[1])))
+        notebitmap = imagefuncs.submatrix(image, pos[0], pos[1], imagefuncs.NOTE_SIZE)
+        squares.append(board.Square(notebitmap, (pos[0], pos[1])))
 
         #imagefuncs.qimshow(['found square', notebitmap])
 
