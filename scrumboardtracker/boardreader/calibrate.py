@@ -68,6 +68,11 @@ class BoardSelectionLabel(QLabel):
         if y < 0:
             y = 0
 
+        if x >= self.originalImage.shape[1]:
+            x = self.originalImage.shape[1] - 1
+        if y >= self.originalImage.shape[0]:
+            y = self.originalImage.shape[0] - 1
+
         self.draggablePoints[idx] = (x,y)
         self.redraw()
 
@@ -141,8 +146,6 @@ class LaneSelectionLabel(QLabel):
         self.draggedPoint = None
         self.linePositions = linePositions
         self.noteCorners = noteCorners
-
-        print 'original line width', self.originalImage.shape[1]
 
         self.redraw()
 
@@ -280,13 +283,13 @@ def saveCalibrationData():
         f.write(json.dumps(calibrationdata))
 
 def clamp_x_positions_to_board(list_of_x, board):
-    return [ min(int(x), board.shape[1]) for x in list_of_x ]
+    return [ min(int(x), board.shape[1] - 1) for x in list_of_x ]
 
 def scale_x_positions(list_of_x, scalefactor):
     return [ int(x * scalefactor) for x in list_of_x ]
 
 def clamp_points_to_board(points, board):
-    points = [ (min(int(x), board.shape[1]), min(int(y), board.shape[0])) for x,y in points ]
+    points = [ (min(int(x), board.shape[1] - 1), min(int(y), board.shape[0] - 1)) for x,y in points ]
     return points
 
 def scale_points(points, scalefactor):
@@ -328,6 +331,7 @@ if __name__ == "__main__":
 
     draggablePoints = dlg.getDraggablePoints()
     draggablePoints = scale_points(draggablePoints, 1 / scalefactor)
+
     draggablePoints = clamp_points_to_board(draggablePoints, image)
 
     calibrationdata['corners'] = draggablePoints[0:4]
@@ -356,10 +360,6 @@ if __name__ == "__main__":
     acos_left = math.acos(abs(xdiff_left) / imagefuncs.eucldistance(leftpoint, toppoint))
     acos_right = math.acos(abs(xdiff_right) / imagefuncs.eucldistance(rightpoint, toppoint))
 
-    print('top', toppoint)
-    print('left', leftpoint)
-    print('right', rightpoint)
-
     if acos_left < acos_right:
         othertopindex = leftindex
         othertoppoint = leftpoint
@@ -387,7 +387,7 @@ if __name__ == "__main__":
     # Ask the user for the aspect ratio of the scrum board (needed for perspective correction)
     #
 
-    correctedimage, _ = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, True)
+    correctedimage = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, True)
 
     downscaled_correctedimage, scalefactor = scale_to_fit_screen(correctedimage)
 
