@@ -1,8 +1,10 @@
+- install numpy >= 1.9.0 on raspberry pi
+
 - define main event loop
   - wait for timer or user requests
   - if timeout:
-    - spawn external process to update scrumboard state
-    - send old scrumboardstate on stdin, get new scrumboardstate (board photo, note bitmaps, note positions, note states) from stdout
+    - (done) spawn external process to update scrumboard state
+    - (done) send old scrumboardstate on stdin, get new scrumboardstate (board photo, note bitmaps, note positions, note states) from stdout
     - process changes in jira/...
   - possible user requests:
     - associate tasks
@@ -10,20 +12,12 @@
       - reset scrumboard state
       - make sure the outcome of any ongoing update will be ignored
 
-- implement the image processing subprocess:
-  - get scrumboard state from stdin
-  - take pictures
-  - find all known notes
-  - find new notes
-  - update note states
-  - output scrumboard state to stdout
-
 - implement median/mode filtering for input pictures
 
 - detect when the board cannot be read and postpone processing (low-light conditions at night or people blocking the view)
-  - put a time limit on this (at it's ok to not update for hours, but during the day it should not take more than one hour, otherwise something is wrong)
+  - put a time limit on this (at night it's ok to not update for hours, but during the day it should not take more than one hour, otherwise something is wrong)
 
-- define user interface (web interface? vnc? ...)
+- define user interface (web interface)
 
 - design UI for start of sprint actions (associating each note to a digital task)
   - preferably use the same UI during the sprint when new notes are discovered
@@ -31,6 +25,6 @@
 - create plugin for interfacing with jira (retrieving stories/tasks, updating task state)
 
 - write build script
-	- include dependencies for numpy, opencv, python 2.7.
+	- include dependencies for numpy (>=1.9.0), opencv, python (=2.7*).
 
 
