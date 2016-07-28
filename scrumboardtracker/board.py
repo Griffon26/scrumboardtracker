@@ -79,6 +79,9 @@ class Scrumboard():
         stateindex = self.states.index(state)
         return positions[stateindex], positions[stateindex + 1]
 
+    def get_bitmap(self):
+        return self.bitmap
+
     def set_bitmap(self, image):
         self.bitmap = image
 

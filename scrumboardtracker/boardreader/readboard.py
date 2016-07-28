@@ -26,7 +26,6 @@ from ciratefi import Ciratefi
 import scrumboardtracker.board as board
 import imagefuncs
 from findnotes import findnotes
-import webcam
 
 from PyQt5 import QtWidgets
 
@@ -68,23 +67,6 @@ def determine_average_colors(image):
     #imagefuncs.qimshow(averages)
     return averages
 
-def get_scrumboard_photo():
-
-    nr_of_images = 8
-    raw_images = []
-
-    for i in range(nr_of_images):
-        raw_images.append(webcam.grab())
-
-    image = np.zeros(raw_images[0].shape, raw_images[0].dtype)
-    for i in range(nr_of_images):
-        image = cv2.addWeighted(image, 1, raw_images[i], 1.0 / nr_of_images, 0)
-
-    #print 'Showing grabbed image'
-    #imagefuncs.qimshow(image)
-
-    return image
-
 def get_scaled_linepositions(calibdata):
     scale = (1.0 * imagefuncs.NOTE_SIZE) / calibdata['averagenotesize']
     scaled_linepositions = [int(l * scale) for l in calibdata['linepositions']]
@@ -114,21 +96,18 @@ def sort_squares_by_approximate_position(squares):
 def readboard(previous_board_state, imagefile=None, debug=False):
     loadcalibrationdata()
 
-    if imagefile:
-        correctedimage = cv2.imread(imagefile)
-    else:
-        image = get_scrumboard_photo()
-        correctedimage = imagefuncs.correct_perspective(imagefuncs.remove_color_cast(image, calibrationdata), calibrationdata, False)
-
-    #imagefuncs.qimshow(correctedimage)
-
     scaled_linepositions = get_scaled_linepositions(calibrationdata)
 
     scrumboard = board.Scrumboard(scaled_linepositions)
     if len(previous_board_state):
         scrumboard.from_serializable(json.loads(previous_board_state))
 
-    scrumboard.set_bitmap(correctedimage)
+    if imagefile:
+        correctedimage = cv2.imread(imagefile)
+        #imagefuncs.qimshow(correctedimage)
+        scrumboard.set_bitmap(correctedimage)
+    else:
+        correctedimage = scrumboard.get_bitmap()
 
     ciratefi = Ciratefi(correctedimage, imagefuncs.NOTE_SIZE, debug=debug)
 

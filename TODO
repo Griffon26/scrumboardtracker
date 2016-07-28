@@ -1,6 +1,11 @@
 - install numpy >= 1.9.0 on raspberry pi
 
 - define main event loop
+  - 3 sub event loops:
+    - webcam loop for waiting for raspistill (provides filtered/regular pictures and serializes requests)
+    - webinterface (does calibration, saves to calibrationdata.json)
+    - scrumboardtracker using readboard (reads calibrationdata.json)
+
   - wait for timer or user requests
   - if timeout:
     - (done) spawn external process to update scrumboard state
