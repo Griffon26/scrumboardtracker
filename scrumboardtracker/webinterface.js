@@ -1,3 +1,5 @@
+// vim: shiftwidth=4:ts=4
+
 // Copyright 2016 Maurice van der Pot <griffon26@kfk4ever.com>
 //
 // This program is free software: you can redistribute it and/or modify
@@ -41,7 +43,21 @@ function debounce(func, wait, immediate) {
     };
 };
 
+var corners = [];
+
+function setFormFieldsCalib1() {
+    cornerpositions = []
+    for (var i = 0; i < corners.length; i++) {
+        cornerpositions.push([corners[i].left, corners[i].top])
+    }
+    $('input[name="corners"]').val(JSON.stringify(cornerpositions))
+    return true;
+}
+
 $(function() {
+
+    var thisPage = $('#title').attr('name');
+
     var canvasInitialized = false;
     var canvas = new fabric.Canvas('canvas', { selection: false });
 
@@ -52,7 +68,7 @@ $(function() {
         if(canvasInitialized) {
 
             availableWidth = window.innerWidth - 20;
-            availableHeight = window.innerHeight - 20;
+            availableHeight = window.innerHeight - 120;
 
             if(availableWidth / availableHeight < canvas.backgroundImage.width / canvas.backgroundImage.height)
             {
@@ -73,6 +89,7 @@ $(function() {
             canvas.renderAll();
         }
     }
+
 
     function makeCorner(x, y) {
         var corner = new fabric.Circle({
@@ -103,7 +120,13 @@ $(function() {
         return line;
     }
 
-    fabric.Image.fromURL('/img', function(img) {
+    if(thisPage == 'calibration1') {
+        imageUrl = 'getImage.cgi';
+    } else {
+        imageUrl = 'getTransformedImage.cgi';
+    }
+
+    fabric.Image.fromURL(imageUrl, function(img) {
 
         if(!canvasInitialized)
         {
@@ -113,39 +136,39 @@ $(function() {
 
             resizeCanvas();
 
-            corners = [];
-            for (var i = 0; i < calibrationdata.corners.length; i++) {
-                x = Math.min(Math.max(calibrationdata.corners[i][0], 0), img.width);
-                y = Math.min(Math.max(calibrationdata.corners[i][1], 0), img.height);
-                corner = makeCorner(x, y);
-                corners.push(corner);
-                canvas.add(corner);
+            if(thisPage == 'calibration1') {
+                for (var i = 0; i < calibrationdata.corners.length; i++) {
+                    x = Math.min(Math.max(calibrationdata.corners[i][0], 0), img.width - 1);
+                    y = Math.min(Math.max(calibrationdata.corners[i][1], 0), img.height - 1);
+                    corner = makeCorner(x, y);
+                    corners.push(corner);
+                    canvas.add(corner);
+                }
+                lines = [];
+                for (var i = 0; i < corners.length; i++) {
+                    line = makeLine(corners[i], corners[(i + 1) % corners.length]);
+                    lines.push(line)
+                    canvas.add(line);
+                    canvas.sendToBack(line);
+                }
+
+                canvas.observe("object:moving", function(e) {
+                    var obj = e.target;
+
+                    var bounds = {
+                        tl: {x: 0, y: 0},
+                        br: {x: obj.canvas.backgroundImage.width - 1, y: obj.canvas.backgroundImage.height - 1}
+                    };
+
+                    obj.top = Math.max(obj.top, bounds.tl.y);
+                    obj.top = Math.min(obj.top, bounds.br.y);
+                    obj.left = Math.max(obj.left, bounds.tl.x);
+                    obj.left = Math.min(obj.left, bounds.br.x);
+
+                    obj.line1.set({'x2': obj.left, 'y2': obj.top});
+                    obj.line2.set({'x1': obj.left, 'y1': obj.top});
+                });
             }
-            lines = [];
-            for (var i = 0; i < corners.length; i++) {
-                line = makeLine(corners[i], corners[(i + 1) % corners.length]);
-                lines.push(line)
-                canvas.add(line);
-                canvas.sendToBack(line);
-            }
-
-            canvas.observe("object:moving", function(e) {
-                var obj = e.target;
-
-                var bounds = {
-                    tl: {x: 0, y: 0},
-                    br: {x: obj.canvas.backgroundImage.width, y: obj.canvas.backgroundImage.height}
-                };
-
-                obj.top = Math.max(obj.top, bounds.tl.y);
-                obj.top = Math.min(obj.top, bounds.br.y);
-                obj.left = Math.max(obj.left, bounds.tl.x);
-                obj.left = Math.min(obj.left, bounds.br.x);
-
-                obj.line1.set({'x2': obj.left, 'y2': obj.top});
-                obj.line2.set({'x1': obj.left, 'y1': obj.top});
-            });
-
         }
     });
 });

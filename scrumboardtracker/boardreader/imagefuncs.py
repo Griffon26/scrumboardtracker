@@ -104,29 +104,36 @@ def remove_color_cast(image, calibrationdata):
     bgr_planes = cv2.split(image)
 
     backgroundpos = calibrationdata['background']
-    average_bgr = image[backgroundpos[1]][backgroundpos[0]]
 
-    for i in xrange(3):
-        thresh = average_bgr[i]
-        plane = bgr_planes[i]
+    if (0 <= backgroundpos[0] <= image.shape[1] and
+        0 <= backgroundpos[1] <= image.shape[0]):
 
-        retval, mask = cv2.threshold(plane, thresh, 255, cv2.THRESH_BINARY);
+        average_bgr = image[backgroundpos[1]][backgroundpos[0]]
 
-        highvalues = (plane - thresh) * (128.0 / (255 - thresh)) + 128;
-        highvalues = highvalues.astype(np.uint8)
+        for i in xrange(3):
+            thresh = average_bgr[i]
+            plane = bgr_planes[i]
 
-        highvalues_masked = cv2.bitwise_and(highvalues, mask)
+            retval, mask = cv2.threshold(plane, thresh, 255, cv2.THRESH_BINARY);
 
-        mask = 255 - mask;
-        lowvalues = cv2.bitwise_and(plane, mask)
+            highvalues = (plane - thresh) * (128.0 / (255 - thresh)) + 128;
+            highvalues = highvalues.astype(np.uint8)
 
-        lowvalues = lowvalues * 128.0 / thresh
-        lowvalues = lowvalues.astype(np.uint8)
+            highvalues_masked = cv2.bitwise_and(highvalues, mask)
 
-        bgr_planes[i] = lowvalues + highvalues_masked
+            mask = 255 - mask;
+            lowvalues = cv2.bitwise_and(plane, mask)
 
-    correctedimage = cv2.merge(bgr_planes)
-    correctedimage = correctedimage.astype(np.uint8)
+            lowvalues = lowvalues * 128.0 / thresh
+            lowvalues = lowvalues.astype(np.uint8)
+
+            bgr_planes[i] = lowvalues + highvalues_masked
+
+        correctedimage = cv2.merge(bgr_planes)
+        correctedimage = correctedimage.astype(np.uint8)
+
+    else:
+        correctedimage = image.copy()
 
     return correctedimage
 
