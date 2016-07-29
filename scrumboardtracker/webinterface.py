@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import cv2
+import json
 import os
 
 from nevow import tags as T, stan
@@ -28,19 +29,23 @@ class MainPage(rend.Page):
         T.html[
             T.head[
                 T.title["Griffon26's nevow test"],
-                T.script(src="http://cdnjs.cloudflare.com/ajax/libs/fabric.js/1.4.0/fabric.min.js"),
+                T.script(src="http://cdnjs.cloudflare.com/ajax/libs/fabric.js/1.6.3/fabric.min.js"),
                 T.script(src="http://code.jquery.com/jquery-2.1.0.min.js"),
                 T.script(src="webinterface.js")
             ],
             T.body[
                 stan.Tag('canvas')(id='canvas', style="border:1px solid #000000;"),
+                T.script(render=T.directive('calibrationdata'))
             ]
         ]
     )
 
-    def __init__(self, webcam):
+    def render_calibrationdata(self, context, data):
+        return T.script['var calibrationdata = %s' % json.dumps(self.calibrationdata)]
+
+    def __init__(self, calibrationdata):
         rend.Page.__init__(self)
-        self.webcam = webcam
+        self.calibrationdata = calibrationdata
 
 class ImageServer(resource.Resource):
     def __init__(self, webcam):
@@ -64,9 +69,12 @@ class ImageServer(resource.Resource):
 class WebInterface:
 
     def __init__(self, webcam):
+        with open('calibrationdata.json', 'rb') as f:
+            calibrationdata = json.loads('\n'.join(f.readlines()))
+
         imgserver = ImageServer(webcam)
 
-        root = MainPage(webcam)
+        root = MainPage(calibrationdata)
         root.putChild('img', imgserver)
         root.putChild('webinterface.js', static.File(os.path.dirname(__file__) + '/webinterface.js'))
 
