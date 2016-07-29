@@ -43,8 +43,7 @@ function debounce(func, wait, immediate) {
 
 $(function() {
     var canvasInitialized = false;
-    var canvas = new fabric.Canvas('canvas');
-
+    var canvas = new fabric.Canvas('canvas', { selection: false });
 
     var debounced = debounce(resizeCanvas, 250);
     window.addEventListener('resize', debounced, false);
@@ -57,22 +56,51 @@ $(function() {
 
             if(availableWidth / availableHeight < canvas.backgroundImage.width / canvas.backgroundImage.height)
             {
-                canvasWidth = availableWidth;
-                canvasHeight = (canvasWidth * canvas.backgroundImage.height) / canvas.backgroundImage.width;
+                zoom = availableWidth / canvas.backgroundImage.width;
             }
             else
             {
-                canvasHeight = availableHeight;
-                canvasWidth = (canvasHeight * canvas.backgroundImage.width) / canvas.backgroundImage.height;
+                zoom = availableHeight / canvas.backgroundImage.height;
             }
+
+            canvasWidth = canvas.backgroundImage.width * zoom;
+            canvasHeight = canvas.backgroundImage.height * zoom;
 
             canvas.setWidth(canvasWidth);
             canvas.setHeight(canvasHeight);
-            canvas.backgroundImage.scaleToWidth(canvasWidth);
-            canvas.backgroundImage.scaleToHeight(canvasHeight);
+            canvas.setZoom(zoom);
 
             canvas.renderAll();
         }
+    }
+
+    function makeCorner(x, y) {
+        var corner = new fabric.Circle({
+            left: x,
+            top: y,
+            originX: 'center',
+            originY: 'center',
+            stroke: 'red',
+            strokeWidth: 3,
+            fill: 'rgba(0,0,0,0)',
+            radius: 7
+        });
+        corner.hasControls = false;
+        corner.hasBorders = false;
+        return corner;
+    }
+
+    function makeLine(corner1, corner2) {
+        var line = new fabric.Line([corner1.left, corner1.top, corner2.left, corner2.top], {
+            stroke: 'red'
+        });
+        corner1.line2 = line;
+        corner2.line1 = line;
+        line.hasControls = false;
+        line.hasBorders = false;
+        line.selectable = false;
+        line.hoverCursor = 'default';
+        return line;
     }
 
     fabric.Image.fromURL('/img', function(img) {
@@ -81,42 +109,43 @@ $(function() {
         {
             canvasInitialized = true;
 
-            //canvas.setDimensions({width:img.width, height:img.height});
             canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
 
             resizeCanvas();
 
-            // create a rectangle object
-            var rect = new fabric.Rect({
-                left: 100,
-                top: 100,
-                fill: 'red',
-                width: 20,
-                height: 20
-            });
+            corners = [];
+            for (var i = 0; i < calibrationdata.corners.length; i++) {
+                x = Math.min(Math.max(calibrationdata.corners[i][0], 0), img.width);
+                y = Math.min(Math.max(calibrationdata.corners[i][1], 0), img.height);
+                corner = makeCorner(x, y);
+                corners.push(corner);
+                canvas.add(corner);
+            }
+            lines = [];
+            for (var i = 0; i < corners.length; i++) {
+                line = makeLine(corners[i], corners[(i + 1) % corners.length]);
+                lines.push(line)
+                canvas.add(line);
+                canvas.sendToBack(line);
+            }
 
             canvas.observe("object:moving", function(e) {
-                    var obj = e.target;
+                var obj = e.target;
 
-                    var halfw = obj.currentWidth/2;
-                    var halfh = obj.currentHeight/2;
-                    var bounds = {tl: {x: -halfw, y:-halfh},
-                        br: {x: obj.canvas.width  - halfw, y: obj.canvas.height - halfh}
-                    };
+                var bounds = {
+                    tl: {x: 0, y: 0},
+                    br: {x: obj.canvas.backgroundImage.width, y: obj.canvas.backgroundImage.height}
+                };
 
-                    // top-left  corner
+                obj.top = Math.max(obj.top, bounds.tl.y);
+                obj.top = Math.min(obj.top, bounds.br.y);
+                obj.left = Math.max(obj.left, bounds.tl.x);
+                obj.left = Math.min(obj.left, bounds.br.x);
 
-                    obj.top = Math.max(obj.top, bounds.tl.y)
-                    obj.top = Math.min(obj.top, bounds.br.y)
-                    obj.left = Math.max(obj.left, bounds.tl.x)
-                    obj.left = Math.min(obj.left, bounds.br.x)
+                obj.line1.set({'x2': obj.left, 'y2': obj.top});
+                obj.line2.set({'x1': obj.left, 'y1': obj.top});
             });
 
-            rect.lockMovementY = true
-            rect.hasControls = false
-             
-            // "add" rectangle onto canvas
-            canvas.add(rect);
         }
     });
 });
