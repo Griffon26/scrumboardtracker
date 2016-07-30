@@ -118,6 +118,7 @@ class CalibrationPage1(rend.Page):
                     T.input(type='number', name='aspectx', step='any'),
                     T.input(type='number', name='aspecty', step='any'),
                     T.input(type='hidden', name='corners'),
+                    T.input(type='hidden', name='background'),
                     T.input(type='submit', value='Next')
                 ],
             ]
@@ -199,7 +200,10 @@ class CalibrationPage2(rend.Page):
     def render_calibrationdata(self, context, data):
         corners = json.loads(context.arg('corners'))
         corners = self.sort_corners_clockwise(corners)
-        self.calibrationdata['corners'] = corners
+        self.calibrationdata['corners'] = [ [ int(x), int(y) ] for x, y in corners ]
+
+        background = json.loads(context.arg('background'))
+        self.calibrationdata['background'] = [ int(background[0]), int(background[1]) ]
 
         self.calibrationdata['aspectratio'] = [ float(context.arg('aspectx')), float(context.arg('aspecty')) ]
 

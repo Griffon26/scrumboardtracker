@@ -44,13 +44,15 @@ function debounce(func, wait, immediate) {
 };
 
 var corners = [];
+var backgroundcircle;
 
 function setFormFieldsCalib1() {
     cornerpositions = []
     for (var i = 0; i < corners.length; i++) {
         cornerpositions.push([corners[i].left, corners[i].top])
     }
-    $('input[name="corners"]').val(JSON.stringify(cornerpositions))
+    $('input[name="corners"]').val(JSON.stringify(cornerpositions));
+    $('input[name="background"]').val(JSON.stringify([backgroundcircle.left, backgroundcircle.top]));
     return true;
 }
 
@@ -90,6 +92,21 @@ $(function() {
         }
     }
 
+    function makeBackgroundCircle(x, y) {
+        var circle = new fabric.Circle({
+            left: x,
+            top: y,
+            originX: 'center',
+            originY: 'center',
+            stroke: 'lightgreen',
+            strokeWidth: 3,
+            fill: 'rgba(0,0,0,0)',
+            radius: 7
+        });
+        circle.hasControls = false;
+        circle.hasBorders = false;
+        return circle;
+    }
 
     function makeCorner(x, y) {
         var corner = new fabric.Circle({
@@ -126,6 +143,7 @@ $(function() {
         imageUrl = 'getTransformedImage.cgi';
     }
 
+
     fabric.Image.fromURL(imageUrl, function(img) {
 
         if(!canvasInitialized)
@@ -137,6 +155,10 @@ $(function() {
             resizeCanvas();
 
             if(thisPage == 'calibration1') {
+
+                $('[name=aspectx]').val(calibrationdata['aspectratio'][0]);
+                $('[name=aspecty]').val(calibrationdata['aspectratio'][1]);
+
                 for (var i = 0; i < calibrationdata.corners.length; i++) {
                     x = Math.min(Math.max(calibrationdata.corners[i][0], 0), img.width - 1);
                     y = Math.min(Math.max(calibrationdata.corners[i][1], 0), img.height - 1);
@@ -152,6 +174,16 @@ $(function() {
                     canvas.sendToBack(line);
                 }
 
+                // Draw the background selection circle after the others so
+                // that it will be on top of any corner at the same position.
+                // This may hide a corner circle, but in that case the user
+                // will still see the lines to determine where it is.
+                x = Math.min(Math.max(calibrationdata.background[0], 0), img.width - 1);
+                y = Math.min(Math.max(calibrationdata.background[1], 0), img.height - 1);
+                backgroundcircle = makeBackgroundCircle(x, y);
+                canvas.add(backgroundcircle);
+                canvas.bringToFront(backgroundcircle);
+
                 canvas.observe("object:moving", function(e) {
                     var obj = e.target;
 
@@ -165,8 +197,8 @@ $(function() {
                     obj.left = Math.max(obj.left, bounds.tl.x);
                     obj.left = Math.min(obj.left, bounds.br.x);
 
-                    obj.line1.set({'x2': obj.left, 'y2': obj.top});
-                    obj.line2.set({'x1': obj.left, 'y1': obj.top});
+                    obj.line1 && obj.line1.set({'x2': obj.left, 'y2': obj.top});
+                    obj.line2 && obj.line2.set({'x1': obj.left, 'y1': obj.top});
                 });
             }
         }
