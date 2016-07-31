@@ -94,7 +94,16 @@ class MainPage(rend.Page):
         linepositions_json = context.arg('linepositions')
         if linepositions_json:
             self.calibrationdata['linepositions'] = json.loads(linepositions_json)
-            save_calibrationdata(self.calibrationdata)
+
+        note = context.arg('note')
+        if note:
+            x, y, size = json.loads(note)
+            x, y, size = int(x), int(y), int(size)
+            self.calibrationdata['notecorners'] = [[x, y], [x + size, y + size]]
+            self.calibrationdata['averagenotesize'] = size
+
+        save_calibrationdata(self.calibrationdata)
+
         return ''
 
     def __init__(self, calibrationdata):
@@ -147,6 +156,7 @@ class CalibrationPage2(rend.Page):
                 stan.Tag('canvas')(id='canvas', style="border:1px solid #000000;"),
                 T.form(action='/', method='post', id='form', onSubmit='return setFormFieldsCalib2()')[
                     T.input(type='hidden', name='linepositions'),
+                    T.input(type='hidden', name='note'),
                     T.input(type='submit', value='Next')
                 ],
             ]

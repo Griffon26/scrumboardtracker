@@ -45,6 +45,7 @@ function debounce(func, wait, immediate) {
 
 var corners = [];
 var backgroundcircle;
+var square;
 
 function setFormFieldsCalib1() {
     cornerpositions = []
@@ -53,6 +54,11 @@ function setFormFieldsCalib1() {
     }
     $('input[name="corners"]').val(JSON.stringify(cornerpositions));
     $('input[name="background"]').val(JSON.stringify([backgroundcircle.left, backgroundcircle.top]));
+    return true;
+}
+
+function setFormFieldsCalib2() {
+    $('input[name="note"]').val(JSON.stringify([square.left, square.top, square.getWidth()]));
     return true;
 }
 
@@ -137,12 +143,36 @@ $(function() {
         return line;
     }
 
+    function makeSquare(x, y, size) {
+        var square = new fabric.Rect({
+            left: x,
+            top: y,
+            fill: 'rgba(0,0,0,0)',
+            width: size,
+            height: size,
+            stroke: '#ff0000',
+            borderColor: '#ffffff',
+            cornerColor: '#ffffff',
+            cornerSize: 6
+        });
+        square.lockUniScaling = true;
+        square.lockRotation = true;
+        square.setControlVisible('mtr', false);
+        square.hasBorders = false;
+        return square;
+    }
+
+    function limit(i, min, max)
+    {
+        return Math.min(Math.max(i, min), max);
+    }
+
+
     if(thisPage == 'calibration1') {
         imageUrl = 'getImage.cgi';
     } else {
         imageUrl = 'getTransformedImage.cgi';
     }
-
 
     fabric.Image.fromURL(imageUrl, function(img) {
 
@@ -160,8 +190,8 @@ $(function() {
                 $('[name=aspecty]').val(calibrationdata['aspectratio'][1]);
 
                 for (var i = 0; i < calibrationdata.corners.length; i++) {
-                    x = Math.min(Math.max(calibrationdata.corners[i][0], 0), img.width - 1);
-                    y = Math.min(Math.max(calibrationdata.corners[i][1], 0), img.height - 1);
+                    x = limit(calibrationdata.corners[i][0], 0, img.width - 1);
+                    y = limit(calibrationdata.corners[i][1], 0, img.height - 1);
                     corner = makeCorner(x, y);
                     corners.push(corner);
                     canvas.add(corner);
@@ -178,27 +208,38 @@ $(function() {
                 // that it will be on top of any corner at the same position.
                 // This may hide a corner circle, but in that case the user
                 // will still see the lines to determine where it is.
-                x = Math.min(Math.max(calibrationdata.background[0], 0), img.width - 1);
-                y = Math.min(Math.max(calibrationdata.background[1], 0), img.height - 1);
+                x = limit(calibrationdata.background[0], 0, img.width - 1);
+                y = limit(calibrationdata.background[1], 0, img.height - 1);
                 backgroundcircle = makeBackgroundCircle(x, y);
                 canvas.add(backgroundcircle);
                 canvas.bringToFront(backgroundcircle);
 
-                canvas.observe("object:moving", function(e) {
+                canvas.on("object:moving", function(e) {
                     var obj = e.target;
 
-                    var bounds = {
-                        tl: {x: 0, y: 0},
-                        br: {x: obj.canvas.backgroundImage.width - 1, y: obj.canvas.backgroundImage.height - 1}
-                    };
-
-                    obj.top = Math.max(obj.top, bounds.tl.y);
-                    obj.top = Math.min(obj.top, bounds.br.y);
-                    obj.left = Math.max(obj.left, bounds.tl.x);
-                    obj.left = Math.min(obj.left, bounds.br.x);
+                    obj.left = limit(obj.left, 0, obj.canvas.backgroundImage.width - 1);
+                    obj.top = limit(obj.top, 0, obj.canvas.backgroundImage.height - 1);
 
                     obj.line1 && obj.line1.set({'x2': obj.left, 'y2': obj.top});
                     obj.line2 && obj.line2.set({'x1': obj.left, 'y1': obj.top});
+                });
+            }
+            else { // calibration2
+                x = limit(calibrationdata.notecorners[0][0], 0, img.width - 1);
+                y = limit(calibrationdata.notecorners[0][1], 0, img.height - 1);
+                square = makeSquare(x, y, calibrationdata.averagenotesize);
+                canvas.add(square);
+
+                canvas.on("object:moving", function(e) {
+                    var obj = e.target;
+
+                    obj.left = limit(obj.left, 0, obj.canvas.backgroundImage.width - obj.getWidth() - 1);
+                    obj.top = limit(obj.top, 0, obj.canvas.backgroundImage.height - obj.getHeight() - 1);
+                });
+
+                canvas.on('object:scaling', function(e) {
+                    var obj = e.target;
+                    obj.strokeWidth = 1 / obj.scaleX;
                 });
             }
         }
