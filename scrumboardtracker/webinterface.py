@@ -85,6 +85,8 @@ class MainPage(rend.Page):
             ],
             T.body[
                 T.a(href='calibration1.html')['Start calibration'],
+                T.br,
+                T.a(href='logs')['Browse logs'],
                 T.div(render=T.directive('postdata'))
             ]
         ]
@@ -239,6 +241,7 @@ class WebInterface:
         root.putChild('calibration2.html', CalibrationPage2(calibrationdata))
         root.putChild('getImage.cgi', imageServer)
         root.putChild('getTransformedImage.cgi', transformedImageServer)
+        root.putChild('logs', static.File('logs'))
         root.putChild('webinterface.js', static.File(os.path.dirname(__file__) + '/webinterface.js'))
 
         self.site = appserver.NevowSite( root )
