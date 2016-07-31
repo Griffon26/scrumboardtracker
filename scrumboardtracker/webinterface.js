@@ -46,6 +46,7 @@ function debounce(func, wait, immediate) {
 var corners = [];
 var backgroundcircle;
 var square;
+var columnlines = [];
 
 function setFormFieldsCalib1() {
     cornerpositions = []
@@ -59,6 +60,12 @@ function setFormFieldsCalib1() {
 
 function setFormFieldsCalib2() {
     $('input[name="note"]').val(JSON.stringify([square.left, square.top, square.getWidth()]));
+
+    linepositions = []
+    for(var i = 0; i < columnlines.length; i++) {
+        linepositions.push(columnlines[i].left);
+    }
+    $('input[name="linepositions"]').val(JSON.stringify(linepositions));
     return true;
 }
 
@@ -162,6 +169,17 @@ $(function() {
         return square;
     }
 
+    function makeColumnLine(linepos, max_y) {
+        var line = new fabric.Line([linepos, 0, linepos, max_y], {
+            stroke: 'blue',
+            padding: 5
+        });
+        line.hasControls = false;
+        line.hasBorders = false;
+        line.lockMovementY = true;
+        return line;
+    }
+
     function limit(i, min, max)
     {
         return Math.min(Math.max(i, min), max);
@@ -225,6 +243,12 @@ $(function() {
                 });
             }
             else { // calibration2
+                for(var i = 0; i < calibrationdata.linepositions.length; i++) {
+                    line = makeColumnLine(calibrationdata.linepositions[i], img.height);
+                    columnlines.push(line);
+                    canvas.add(line);
+                }
+
                 x = limit(calibrationdata.notecorners[0][0], 0, img.width - 1);
                 y = limit(calibrationdata.notecorners[0][1], 0, img.height - 1);
                 square = makeSquare(x, y, calibrationdata.averagenotesize);

@@ -93,7 +93,7 @@ class MainPage(rend.Page):
     def render_postdata(self, context, data):
         linepositions_json = context.arg('linepositions')
         if linepositions_json:
-            self.calibrationdata['linepositions'] = json.loads(linepositions_json)
+            self.calibrationdata['linepositions'] = [int(p) for p in sorted(json.loads(linepositions_json))]
 
         note = context.arg('note')
         if note:
