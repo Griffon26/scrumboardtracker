@@ -25,7 +25,8 @@ overdue tasks for instance.
 
 # Current status
 
-The algorithm for recognizing notes on a scrum board and finding them again in later images is currently being implemented.
+The algorithm for recognizing notes on a scrum board and finding them again in
+later images is currently being implemented.
 
 # TODO
 
@@ -34,4 +35,6 @@ The algorithm for recognizing notes on a scrum board and finding them again in l
 # Known limitations
 
 * The scrum board must be white, gray or black, while task notes must have other colors.
+* The scrum board must not be too reflective or translucent or it may lead the
+  application to detect colored notes where there are none
 * Only square task notes are supported
